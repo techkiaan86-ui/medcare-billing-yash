@@ -1,0 +1,1 @@
+import { PrismaClient } from '@prisma/client'; const prisma = new PrismaClient({ datasources: { db: { url: 'mysql://root:@localhost:3306/medcare_billing' } } }); prisma.$connect().then(() => { console.log('Connected 3306'); process.exit(0); }).catch(e => { console.log('Error 3306: ' + e.message); process.exit(1); });
