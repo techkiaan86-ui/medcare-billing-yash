@@ -381,6 +381,33 @@ export const getFourBillsByCase = async (req, res) => {
 };
 
 /**
+ * Single High-Performance Endpoint to fetch all CMS-1500 claims directly from Database
+ */
+export const getAllCmsClaims = async (req, res) => {
+  try {
+    const bills = await prisma.bill.findMany({
+      include: {
+        serviceLines: true,
+        provider: true,
+        case: {
+          include: {
+            patient: true
+          }
+        }
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      bills: bills.map(formatBill)
+    });
+  } catch (error) {
+    console.error('Error fetching all CMS claims:', error);
+    return res.status(500).json({ error: 'Internal server error fetching CMS claims.' });
+  }
+};
+
+/**
  * Get single bill details by ID
  */
 export const getBillById = async (req, res) => {

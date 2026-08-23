@@ -2,12 +2,14 @@ import express from 'express';
 import { 
   getFourBillsByCase, getBillById, createBill, addServiceLine, 
   postPayment, postAdjustment, finaliseBill, getAgingSummary,
-  getOverviewStats, getPaymentsList, getPracticeReports, updateBill, deleteBill
+  getOverviewStats, getPaymentsList, getPracticeReports, updateBill, deleteBill,
+  getAllCmsClaims
 } from '../controllers/billingController.js';
 
 const router = express.Router();
 
 // Register paths
+router.get('/cms-claims', getAllCmsClaims);
 router.get('/overview-stats', getOverviewStats);
 router.get('/transactions', getPaymentsList);
 router.get('/reports', getPracticeReports);
