@@ -72,7 +72,7 @@ const formatCase = (c) => {
  * Get cases list (supports search and patientId filter)
  */
 export const getCases = async (req, res) => {
-  const { search, patientId } = req.query;
+  const { search, patientId, providerId } = req.query;
 
   try {
     const where = {};
@@ -92,13 +92,20 @@ export const getCases = async (req, res) => {
       ];
     }
 
-    const cases = await prisma.case.findMany({
+    let cases = await prisma.case.findMany({
       where,
       include: {
         patient: true
       },
       orderBy: { createdAt: 'desc' }
     });
+
+    if (providerId) {
+      cases = cases.filter(c => {
+        const ids = typeof c.assignedProviderIds === 'string' ? JSON.parse(c.assignedProviderIds) : c.assignedProviderIds;
+        return Array.isArray(ids) && ids.includes(providerId);
+      });
+    }
 
     return res.status(200).json(cases.map(formatCase));
   } catch (error) {
