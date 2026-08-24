@@ -5,7 +5,7 @@ import { prisma } from '../config/db.js';
  */
 const formatBill = (b) => {
   if (!b) return null;
-  
+
   const formattedLines = (b.serviceLines || []).map(l => {
     // Reconstruct payments object for frontend compatibility
     const insPay = Number(l.insurancePayment) || 0;
@@ -268,7 +268,7 @@ export const getFourBillsByCase = async (req, res) => {
 
     for (const provId of standardProviders) {
       const billId = `bill-${provId.replace('prov-', '')}-${targetCase.id}`;
-      
+
       let existingBill = await prisma.bill.findUnique({
         where: { id: billId },
         include: { serviceLines: true }
@@ -303,7 +303,7 @@ export const getFourBillsByCase = async (req, res) => {
       // If bill has no service lines, seed default clinical procedure lines
       if (!existingBill.serviceLines || existingBill.serviceLines.length === 0) {
         const defaultLines = getDefaultServiceLinesForProvider(provId, targetCase.accidentDate || targetCase.initialDate);
-        
+
         let billTotal = 0;
         for (const line of defaultLines) {
           const lineId = `line-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -332,7 +332,7 @@ export const getFourBillsByCase = async (req, res) => {
               balance: line.charge,
               lineBalance: line.charge
             }
-          }).catch(() => {});
+          }).catch(() => { });
         }
 
         await prisma.bill.update({
@@ -450,7 +450,7 @@ export const createBill = async (req, res) => {
 
   const providerKey = data.providerId.replace('prov-', '');
   const generatedId = data.id || `bill-${providerKey}-${data.caseId}`;
-  
+
   const statementNum = `${Math.floor(100000 + Math.random() * 900000)}`;
   const statementDate = new Date().toLocaleDateString('en-US');
 
@@ -527,7 +527,7 @@ export const addServiceLine = async (req, res) => {
     for (const item of linesToAdd) {
       const lineId = `srv-l-${Date.now()}-${Math.floor(Math.random() * 100)}`;
       const chargeAmount = parseFloat(item.charge) || 180.00;
-      
+
       await prisma.serviceLine.create({
         data: {
           id: lineId,
@@ -584,8 +584,8 @@ export const postPayment = async (req, res) => {
     }
 
     const lines = bill.serviceLines || [];
-    let targetLine = (lineIndex !== undefined && lines[lineIndex]) 
-      ? lines[lineIndex] 
+    let targetLine = (lineIndex !== undefined && lines[lineIndex])
+      ? lines[lineIndex]
       : lines.find(l => Number(l.lineBalance) > 0) || lines[0];
 
     if (!targetLine) {
@@ -684,8 +684,8 @@ export const postAdjustment = async (req, res) => {
     }
 
     const lines = bill.serviceLines || [];
-    let targetLine = (lineIndex !== undefined && lines[lineIndex]) 
-      ? lines[lineIndex] 
+    let targetLine = (lineIndex !== undefined && lines[lineIndex])
+      ? lines[lineIndex]
       : lines.find(l => Number(l.lineBalance) > 0) || lines[0];
 
     if (!targetLine) {
@@ -856,7 +856,7 @@ export const getAgingSummary = async (req, res) => {
       providerMap[b.providerId].past90 += p90;
       providerMap[b.providerId].total += bal;
       if (b.statementNumber) providerMap[b.providerId].statement = b.statementNumber;
-      
+
       if (providerMap[b.providerId].past90 > 0 || providerMap[b.providerId].past60 > 0) {
         providerMap[b.providerId].risk = 'high';
       }
