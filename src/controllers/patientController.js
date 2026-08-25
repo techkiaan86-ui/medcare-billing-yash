@@ -232,7 +232,6 @@ export const deletePatient = async (req, res) => {
 
     await prisma.$transaction([
       prisma.clinicalNote.deleteMany({ where: { patientId: id } }),
-      prisma.document.deleteMany({ where: { patientId: id } }),
       prisma.appointment.deleteMany({ where: { patientId: id } }),
       prisma.case.deleteMany({ where: { patientId: id } }),
       prisma.patient.delete({ where: { id } })
