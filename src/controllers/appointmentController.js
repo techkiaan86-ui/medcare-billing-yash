@@ -626,14 +626,20 @@ export const updateAppointment = async (req, res) => {
 
   try {
     const updatePayload = {};
-    if (updateData.date) updatePayload.date = updateData.date;
+    if (updateData.date) {
+      updatePayload.date = String(updateData.date);
+      const parsedDate = new Date(updateData.date);
+      if (!isNaN(parsedDate.getTime())) {
+        updatePayload.appointmentDate = parsedDate;
+      }
+    }
     if (updateData.startTime) updatePayload.startTime = updateData.startTime;
     if (updateData.endTime) updatePayload.endTime = updateData.endTime;
     if (updateData.providerId) updatePayload.providerId = updateData.providerId;
     if (updateData.reasonForVisit !== undefined) updatePayload.reasonForVisit = updateData.reasonForVisit;
     if (updateData.location) updatePayload.location = updateData.location;
     if (updateData.appointmentType) updatePayload.appointmentType = updateData.appointmentType;
-    if (updateData.cptCode) updatePayload.cptCode = updateData.cptCode;
+    if (updateData.cptCode) updatePayload.cptCode = String(updateData.cptCode).slice(0, 10);
     if (updateData.status) updatePayload.status = updateData.status;
 
     const updated = await prisma.appointment.update({
@@ -648,7 +654,7 @@ export const updateAppointment = async (req, res) => {
     return res.status(200).json(formatAppointment(updated));
   } catch (error) {
     console.error('Error updating appointment metadata:', error);
-    return res.status(500).json({ error: 'Failed to update appointment.' });
+    return res.status(500).json({ error: error.message || 'Failed to update appointment.' });
   }
 };
 
