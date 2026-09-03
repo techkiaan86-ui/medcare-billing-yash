@@ -66,7 +66,10 @@ export const getAppointments = async (req, res) => {
           }
         }
       },
-      orderBy: { startTime: 'asc' }
+      orderBy: [
+        { date: 'desc' },
+        { startTime: 'asc' }
+      ]
     });
 
     const notes = await prisma.clinicalNote.findMany({
@@ -625,6 +628,11 @@ export const updateAppointment = async (req, res) => {
   const updateData = req.body;
 
   try {
+    const existingApt = await prisma.appointment.findUnique({
+      where: { id },
+      select: { patientId: true }
+    });
+
     const updatePayload = {};
     if (updateData.date) {
       updatePayload.date = String(updateData.date);
@@ -639,8 +647,27 @@ export const updateAppointment = async (req, res) => {
     if (updateData.reasonForVisit !== undefined) updatePayload.reasonForVisit = updateData.reasonForVisit;
     if (updateData.location) updatePayload.location = updateData.location;
     if (updateData.appointmentType) updatePayload.appointmentType = updateData.appointmentType;
-    if (updateData.cptCode) updatePayload.cptCode = String(updateData.cptCode).slice(0, 10);
+    if (updateData.cptCode) updatePayload.cptCode = String(updateData.cptCode);
     if (updateData.status) updatePayload.status = updateData.status;
+
+    if (existingApt?.patientId && (updateData.patientName || updateData.patientPhone || updateData.patientDob)) {
+      const patientUpdate = {};
+      if (updateData.patientName) {
+        const nameParts = updateData.patientName.trim().split(/\s+/);
+        patientUpdate.firstName = nameParts[0] || '';
+        patientUpdate.lastName = nameParts.slice(1).join(' ') || '';
+      }
+      if (updateData.patientPhone) {
+        patientUpdate.phone = updateData.patientPhone;
+      }
+      if (updateData.patientDob) {
+        patientUpdate.dob = updateData.patientDob;
+      }
+      await prisma.patient.update({
+        where: { id: existingApt.patientId },
+        data: patientUpdate
+      }).catch(err => console.warn('Failed updating patient record:', err));
+    }
 
     const updated = await prisma.appointment.update({
       where: { id },
