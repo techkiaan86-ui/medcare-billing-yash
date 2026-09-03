@@ -154,8 +154,16 @@ export const createNote = async (req, res) => {
       where: { id: providerId }
     });
     if (!existingProvider) {
-      const firstProv = await prisma.provider.findFirst();
-      providerId = firstProv ? firstProv.id : 'prov-josmic';
+      const newProv = await prisma.provider.create({
+        data: {
+          id: providerId,
+          name: data.providerName || 'New Practice Provider',
+          businessName: 'F&M Health & Wellness',
+          status: 'ACTIVE',
+          isPlaceholder: true
+        }
+      });
+      providerId = newProv.id;
     }
 
     const noteType = data.type || data.noteType || 'JOSMIC_PAIN';

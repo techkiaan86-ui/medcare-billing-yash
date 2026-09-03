@@ -195,11 +195,17 @@ export const createAppointment = async (req, res) => {
       targetProviderId = provObj.id;
       provName = provObj.name;
     } else {
-      const fallbackProv = await prisma.provider.findFirst();
-      if (fallbackProv) {
-        targetProviderId = fallbackProv.id;
-        provName = fallbackProv.name;
-      }
+      const newProv = await prisma.provider.create({
+        data: {
+          id: targetProviderId,
+          name: data.providerName || 'New Practice Provider',
+          businessName: 'F&M Health & Wellness',
+          status: 'ACTIVE',
+          isPlaceholder: true
+        }
+      });
+      targetProviderId = newProv.id;
+      provName = newProv.name;
     }
 
     // Parse appointmentDate if valid
