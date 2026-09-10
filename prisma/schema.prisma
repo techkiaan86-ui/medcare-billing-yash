@@ -145,7 +145,7 @@ model Appointment {
   reminderPreference String?   @map("reminder_preference") @db.VarChar(50)
   reasonForVisit     String?   @map("reason_for_visit") @db.Text
   appointmentType    String?   @map("appointment_type") @db.VarChar(100)
-  cptCode            String?   @map("cpt_code") @db.VarChar(10)
+  cptCode            String?   @map("cpt_code") @db.VarChar(255)
   location           String?   @db.VarChar(150)
   createdAt          DateTime  @default(now()) @map("created_at")
   patient            Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
