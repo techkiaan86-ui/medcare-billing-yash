@@ -4,6 +4,14 @@ import { prisma } from '../config/db.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'medcare_billing_super_secret_key';
 
+const getProviderIdForUser = (user) => {
+  if (!user) return null;
+  if (user.role === 'Doctor') return 'prov-josmic';
+  if (user.role === 'Therapist') return 'prov-davs';
+  if (user.role === 'Counselor') return 'prov-counselor';
+  return null;
+};
+
 export const login = async (req, res) => {
   const { email, password } = req.body;
 
@@ -52,6 +60,7 @@ export const login = async (req, res) => {
         email: user.email,
         name: user.name || user.fullName || 'Staff User',
         role: user.role,
+        providerId: getProviderIdForUser(user),
       },
     });
   } catch (error) {
@@ -121,6 +130,7 @@ export const getCurrentUser = async (req, res) => {
       role: user.role,
       title: user.title,
       avatar: user.avatar,
+      providerId: getProviderIdForUser(user),
       status: user.status
     });
   } catch (error) {

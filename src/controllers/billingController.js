@@ -38,6 +38,17 @@ const formatBill = (b) => {
   const patientFullName = pt ? `${pt.firstName || ''} ${pt.lastName || ''}`.trim() : (b.patientName || '');
   const ptAddr = pt ? `${pt.street || pt.addressLine1 || ''}, ${pt.city || ''} ${pt.state || ''}`.trim() : (b.patientAddress || '');
 
+  let dxCodes = [];
+  if (b.case?.diagnosisCodes) {
+    dxCodes = typeof b.case.diagnosisCodes === 'string'
+      ? JSON.parse(b.case.diagnosisCodes)
+      : b.case.diagnosisCodes;
+  } else if (b.diagnosisCodes) {
+    dxCodes = typeof b.diagnosisCodes === 'string'
+      ? b.diagnosisCodes.split(/[,;\n]+/).map(d => d.trim()).filter(Boolean)
+      : b.diagnosisCodes;
+  }
+
   return {
     id: b.id,
     caseId: b.caseId,
@@ -54,6 +65,7 @@ const formatBill = (b) => {
     statementDate: b.statementDate || '',
     billToName: b.billToName || (b.case?.attorneyName ? `${b.case.attorneyName}` : ''),
     billToAddress: b.billToAddress || b.case?.lawFirmAddress || '',
+    diagnosisCodes: dxCodes,
     status: b.status,
     lineItems: formattedLines,
     totals: typeof b.totals === 'string' ? JSON.parse(b.totals) : b.totals || { totalCharges: 0, totalPayments: 0, totalAdjustments: 0, balanceDue: 0 },
@@ -455,6 +467,16 @@ export const createBill = async (req, res) => {
   const statementDate = new Date().toLocaleDateString('en-US');
 
   try {
+    if (data.diagnosisCodes && data.caseId) {
+      const dxList = typeof data.diagnosisCodes === 'string'
+        ? data.diagnosisCodes.split(/[,;\n]+/).map(d => d.trim()).filter(Boolean)
+        : data.diagnosisCodes;
+      await prisma.case.update({
+        where: { id: data.caseId },
+        data: { diagnosisCodes: dxList }
+      }).catch(() => {});
+    }
+
     // Check if the bill already exists to prevent duplicate insertion error
     const existing = await prisma.bill.findUnique({
       where: { id: generatedId },
@@ -470,6 +492,11 @@ export const createBill = async (req, res) => {
     });
 
     if (existing) {
+      if (data.diagnosisCodes && existing.case) {
+        existing.case.diagnosisCodes = typeof data.diagnosisCodes === 'string'
+          ? data.diagnosisCodes.split(/[,;\n]+/).map(d => d.trim()).filter(Boolean)
+          : data.diagnosisCodes;
+      }
       return res.status(200).json(formatBill(existing));
     }
 

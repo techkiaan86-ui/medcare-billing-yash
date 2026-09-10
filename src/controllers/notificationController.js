@@ -84,12 +84,21 @@ export const getNotificationLogs = async (req, res) => {
  * Get live aggregate practice notifications for the top header notification center
  */
 export const getLiveNotifications = async (req, res) => {
+  const { providerId, role } = req.query;
+
   try {
+    const isFullAccess = !role || ['Receptionist', 'Super Admin', 'Billing Staff'].includes(role);
+    const aptWhere = {};
+    if (!isFullAccess && providerId) {
+      aptWhere.providerId = providerId;
+    }
+
     // 1. Fetch appointments
     const appointments = await prisma.appointment.findMany({
+      where: aptWhere,
       include: {
         patient: {
-          select: { firstName: true, lastName: true, phone: true }
+          select: { firstName: true, lastName: true, phone: true, assignedProviderIds: true }
         },
         provider: {
           select: { name: true }
