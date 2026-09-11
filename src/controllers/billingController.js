@@ -6,6 +6,14 @@ import { prisma } from '../config/db.js';
 const formatBill = (b) => {
   if (!b) return null;
 
+  // Parse provider JSON fields safely
+  const provAddr = typeof b.provider?.address === 'string' ? JSON.parse(b.provider.address) : b.provider?.address || {};
+  const provContact = typeof b.provider?.contact === 'string' ? JSON.parse(b.provider.contact) : b.provider?.contact || {};
+  const provIdentifiers = typeof b.provider?.identifiers === 'string' ? JSON.parse(b.provider.identifiers) : b.provider?.identifiers || {};
+  const provRendering = typeof b.provider?.renderingProvider === 'string' ? JSON.parse(b.provider.renderingProvider) : b.provider?.renderingProvider || {};
+  const provServiceFacility = typeof b.provider?.serviceFacility === 'string' ? JSON.parse(b.provider.serviceFacility) : b.provider?.serviceFacility || {};
+  const provBillingProvider = typeof b.provider?.billingProvider === 'string' ? JSON.parse(b.provider.billingProvider) : b.provider?.billingProvider || {};
+
   const formattedLines = (b.serviceLines || []).map(l => {
     // Reconstruct payments object for frontend compatibility
     const insPay = Number(l.insurancePayment) || 0;
@@ -21,6 +29,8 @@ const formatBill = (b) => {
       modifier2: l.modifier2 || '',
       modifier3: l.modifier3 || '',
       modifier4: l.modifier4 || '',
+      diagPointer: l.diagPointer || l.diagnosisPointer || '',
+      placeOfService: l.placeOfService || '11',
       units: l.units || 1,
       charge: Number(l.charge),
       payments: {
@@ -49,27 +59,68 @@ const formatBill = (b) => {
       : b.diagnosisCodes;
   }
 
+  const parsedTotals = typeof b.totals === 'string' ? JSON.parse(b.totals) : b.totals || { totalCharges: 0, totalPayments: 0, totalAdjustments: 0, balanceDue: 0 };
+
   return {
     id: b.id,
     caseId: b.caseId,
     providerId: b.providerId,
     providerName: b.provider?.name || '',
-    providerAddress: b.provider?.address ? `${b.provider.address.street || ''}, ${b.provider.address.city || ''}` : '',
-    providerPhone: b.provider?.contact?.phone || '',
+    providerBusinessName: b.provider?.businessName || '',
+    providerAddress: b.provider?.address ? `${provAddr.street || ''}, ${provAddr.city || ''}` : '',
+    providerPhone: provContact.phone || '',
     serviceCategory: b.provider?.serviceCategory || '',
+    // CMS-1500: Individual patient name parts for proper LASTNAME, FIRSTNAME MI formatting
+    patientFirstName: pt?.firstName || '',
+    patientLastName: pt?.lastName || '',
+    patientMiddleName: pt?.middleName || '',
     patientId: pt?.id || b.case?.patientId || b.patientId || '',
     patientName: patientFullName,
     patientAddress: ptAddr,
+    // CMS-1500: Individual patient address components
+    patientStreet: pt?.street || '',
+    patientCity: pt?.city || '',
+    patientState: pt?.state || '',
+    patientZip: pt?.zipCode || '',
+    patientPhone: pt?.phone || '',
+    patientDob: pt?.dob || '',
+    patientSex: pt?.sex || '',
     patientSystemId: pt?.patientId || '',
     statementNumber: b.statementNumber || '',
     statementDate: b.statementDate || '',
     billToName: b.billToName || (b.case?.attorneyName ? `${b.case.attorneyName}` : ''),
     billToAddress: b.billToAddress || b.case?.lawFirmAddress || '',
     diagnosisCodes: dxCodes,
+    // CMS-1500: Referring provider from Case
+    referringProviderName: b.case?.referringProviderName || '',
+    referringProviderNpi: b.case?.referringProviderNpi || '',
+    // CMS-1500: Provider identifiers
+    providerNpi: provIdentifiers.npi || '',
+    providerTaxId: provIdentifiers.taxId || '',
+    providerSsnOrEin: provIdentifiers.ssnOrEin || 'EIN',
+    // CMS-1500: Provider facility and billing data (structured)
+    renderingProvider: provRendering,
+    serviceFacility: provServiceFacility,
+    billingProvider: provBillingProvider,
+    identifiers: provIdentifiers,
+    // CMS-1500: Provider address components
+    providerStreet: provAddr.street || '',
+    providerSuite: provAddr.suite || '',
+    providerCity: provAddr.city || '',
+    providerState: provAddr.state || '',
+    providerZip: provAddr.zipCode || '',
+    // CMS-1500: Case details for accident/illness dates
+    accidentDate: b.case?.accidentDate || '',
+    accidentState: b.case?.accidentState || '',
+    attorneyName: b.case?.attorneyName || '',
+    attorneyAddress: b.case?.attorneyAddress || b.case?.lawFirmAddress || '',
     status: b.status,
     lineItems: formattedLines,
-    totals: typeof b.totals === 'string' ? JSON.parse(b.totals) : b.totals || { totalCharges: 0, totalPayments: 0, totalAdjustments: 0, balanceDue: 0 },
-    aging: typeof b.aging === 'string' ? JSON.parse(b.aging) : b.aging || { current: 0, past30: 0, past60: 0, past90: 0 }
+    totals: parsedTotals,
+    totalPayments: parsedTotals.totalPayments || 0,
+    balanceDue: parsedTotals.balanceDue || 0,
+    aging: typeof b.aging === 'string' ? JSON.parse(b.aging) : b.aging || { current: 0, past30: 0, past60: 0, past90: 0 },
+    createdAt: b.createdAt
   };
 };
 
@@ -276,97 +327,6 @@ export const getFourBillsByCase = async (req, res) => {
       });
     }
 
-    const standardProviders = ['prov-josmic', 'prov-davs', 'prov-anik', 'prov-counselor', 'prov-tpi', 'prov-tecar'];
-
-    for (const provId of standardProviders) {
-      const billId = `bill-${provId.replace('prov-', '')}-${targetCase.id}`;
-
-      let existingBill = await prisma.bill.findUnique({
-        where: { id: billId },
-        include: { serviceLines: true }
-      });
-
-      const providerExists = await prisma.provider.findUnique({
-        where: { id: provId }
-      });
-
-      if (!existingBill && providerExists) {
-        const stmtNum = `${Math.floor(100000 + Math.random() * 900000)}`;
-        existingBill = await prisma.bill.create({
-          data: {
-            id: billId,
-            caseId: targetCase.id,
-            providerId: provId,
-            invoiceNumber: `INV-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-            statementNumber: stmtNum,
-            statementDate: new Date().toLocaleDateString('en-US'),
-            billToName: targetCase.attorneyName ? `${targetCase.attorneyName} (${targetCase.lawFirm || 'Law Firm'})` : 'PATIENT SELF-PAY / DIRECT BILLING',
-            billToAddress: targetCase.lawFirmAddress || (targetCase.patient?.street ? `${targetCase.patient.street}, ${targetCase.patient.city}` : '10101 Harwin Dr, Houston TX'),
-            status: 'ISSUED',
-            totals: { totalCharges: 0, totalPayments: 0, totalAdjustments: 0, balanceDue: 0 },
-            aging: { current: 0, past30: 0, past60: 0, past90: 0 }
-          },
-          include: { serviceLines: true }
-        });
-      }
-
-      if (!existingBill) continue;
-
-      // If bill has no service lines, seed default clinical procedure lines
-      if (!existingBill.serviceLines || existingBill.serviceLines.length === 0) {
-        const defaultLines = getDefaultServiceLinesForProvider(provId, targetCase.accidentDate || targetCase.initialDate);
-
-        let billTotal = 0;
-        for (const line of defaultLines) {
-          const lineId = `line-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
-          billTotal += line.charge;
-          await prisma.serviceLine.create({
-            data: {
-              id: lineId,
-              billId: existingBill.id,
-              dos: line.dos,
-              dateOfService: line.dos,
-              placeOfService: '11',
-              cptCode: line.cptCode,
-              description: line.description,
-              modifier1: line.modifier1 || '',
-              modifier2: line.modifier2 || '',
-              modifier3: '',
-              modifier4: '',
-              diagPointer: '1',
-              diagnosisPointer: '1',
-              units: line.units,
-              charge: line.charge,
-              insurancePayment: 0,
-              patientPayment: 0,
-              otherPayment: 0,
-              adjustments: 0,
-              balance: line.charge,
-              lineBalance: line.charge
-            }
-          }).catch(() => { });
-        }
-
-        await prisma.bill.update({
-          where: { id: existingBill.id },
-          data: {
-            totals: {
-              totalCharges: billTotal,
-              totalPayments: 0,
-              totalAdjustments: 0,
-              balanceDue: billTotal
-            },
-            aging: {
-              current: billTotal,
-              past30: 0,
-              past60: 0,
-              past90: 0
-            }
-          }
-        });
-      }
-    }
-
     const bills = await prisma.bill.findMany({
       where: {
         caseId: targetCase.id
@@ -561,8 +521,16 @@ export const addServiceLine = async (req, res) => {
           billId: id,
           dos: item.dos || new Date().toLocaleDateString('en-US'),
           dateOfService: item.dos || new Date().toLocaleDateString('en-US'),
+          placeOfService: item.placeOfService || '11',
           cptCode: item.cptCode || '99204',
           description: item.description || 'Medical Consultation',
+          modifier1: item.modifier1 || item.mod1 || '',
+          modifier2: item.modifier2 || item.mod2 || '',
+          modifier3: item.modifier3 || item.mod3 || '',
+          modifier4: item.modifier4 || item.mod4 || '',
+          diagPointer: item.diagPointer || item.diagnosisPointer || '',
+          diagnosisPointer: item.diagnosisPointer || item.diagPointer || '',
+          units: parseInt(item.units) || 1,
           charge: chargeAmount,
           balance: chargeAmount,
           lineBalance: chargeAmount,
