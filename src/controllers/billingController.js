@@ -566,7 +566,11 @@ export const addServiceLine = async (req, res) => {
  */
 export const postPayment = async (req, res) => {
   const { id } = req.params;
-  const { lineIndex, amount, payerType, referenceNumber } = req.body;
+  const { lineIndex, amount, payerType, type, method, source, referenceNumber, checkRef } = req.body;
+
+  const actualPayerType = payerType || type || 'INSURANCE';
+  const actualMethod = method || source || 'EFT';
+  const actualRef = referenceNumber || checkRef || '';
 
   try {
     const bill = await prisma.bill.findUnique({
@@ -596,9 +600,9 @@ export const postPayment = async (req, res) => {
           charge: parseFloat(amount) || 0,
           balance: 0,
           lineBalance: 0,
-          insurancePayment: payerType === 'INSURANCE' ? (parseFloat(amount) || 0) : 0,
-          patientPayment: payerType === 'PATIENT' ? (parseFloat(amount) || 0) : 0,
-          otherPayment: (payerType !== 'INSURANCE' && payerType !== 'PATIENT') ? (parseFloat(amount) || 0) : 0
+          insurancePayment: actualPayerType === 'INSURANCE' ? (parseFloat(amount) || 0) : 0,
+          patientPayment: actualPayerType === 'PATIENT' ? (parseFloat(amount) || 0) : 0,
+          otherPayment: (actualPayerType !== 'INSURANCE' && actualPayerType !== 'PATIENT') ? (parseFloat(amount) || 0) : 0
         }
       });
     } else {
@@ -606,9 +610,9 @@ export const postPayment = async (req, res) => {
       let patientPayment = Number(targetLine.patientPayment) || 0;
       let otherPayment = Number(targetLine.otherPayment) || 0;
 
-      if (payerType === 'INSURANCE') {
+      if (actualPayerType === 'INSURANCE') {
         insurancePayment += parseFloat(amount);
-      } else if (payerType === 'PATIENT') {
+      } else if (actualPayerType === 'PATIENT') {
         patientPayment += parseFloat(amount);
       } else {
         otherPayment += parseFloat(amount);
@@ -636,10 +640,10 @@ export const postPayment = async (req, res) => {
         id: `tx-${Date.now()}`,
         billId: id,
         transactionType: 'PAYMENT',
-        source: payerType || 'INSURANCE',
+        source: actualMethod,
         amount: parseFloat(amount),
-        referenceNumber: referenceNumber || '',
-        notes: `Payer: ${payerType}. Ref: ${referenceNumber || 'N/A'}`
+        referenceNumber: actualRef,
+        notes: `Payer: ${actualPayerType}. Ref: ${actualRef || 'N/A'}`
       }
     });
 
