@@ -45,8 +45,18 @@ const formatBill = (b) => {
   });
 
   const pt = b.case?.patient;
+  const ptAddress = typeof pt?.address === 'string'
+    ? (() => { try { return JSON.parse(pt.address); } catch (e) { return {}; } })()
+    : (pt?.address || {});
+
+  const ptStreet = pt?.street || ptAddress.street || pt?.addressLine1 || '';
+  const ptCity = pt?.city || ptAddress.city || '';
+  const ptState = pt?.state || ptAddress.state || '';
+  const ptZip = pt?.zipCode || ptAddress.zipCode || '';
+  const ptPhone = pt?.phone || ptAddress.phone || pt?.mobile || '';
+
   const patientFullName = pt ? `${pt.firstName || ''} ${pt.lastName || ''}`.trim() : (b.patientName || '');
-  const ptAddr = pt ? `${pt.street || pt.addressLine1 || ''}, ${pt.city || ''} ${pt.state || ''}`.trim() : (b.patientAddress || '');
+  const ptAddr = pt ? `${ptStreet}, ${ptCity} ${ptState} ${ptZip}`.replace(/^, |, $/g, '').trim() : (b.patientAddress || '');
 
   let dxCodes = [];
   if (b.case?.diagnosisCodes) {
@@ -59,7 +69,36 @@ const formatBill = (b) => {
       : b.diagnosisCodes;
   }
 
-  const parsedTotals = typeof b.totals === 'string' ? JSON.parse(b.totals) : b.totals || { totalCharges: 0, totalPayments: 0, totalAdjustments: 0, balanceDue: 0 };
+  let sumCharges = 0;
+  let sumPayments = 0;
+  let sumAdjustments = 0;
+  formattedLines.forEach(l => {
+    sumCharges += (l.charge || 0);
+    sumPayments += ((l.payments?.insurance || 0) + (l.payments?.patient || 0) + (l.payments?.other || 0));
+    sumAdjustments += (l.adjustments || 0);
+  });
+  const sumBalance = Math.max(0, sumCharges - (sumPayments + sumAdjustments));
+
+  let parsedTotals = typeof b.totals === 'string' ? JSON.parse(b.totals) : b.totals;
+  if (!parsedTotals || (parsedTotals.totalCharges === 0 && sumCharges > 0)) {
+    parsedTotals = {
+      totalCharges: Number(sumCharges.toFixed(2)),
+      totalPayments: Number(sumPayments.toFixed(2)),
+      totalAdjustments: Number(sumAdjustments.toFixed(2)),
+      balanceDue: Number(sumBalance.toFixed(2))
+    };
+  }
+
+  let parsedAging = typeof b.aging === 'string' ? JSON.parse(b.aging) : b.aging;
+  const agingSum = (parsedAging?.current || 0) + (parsedAging?.past30 || 0) + (parsedAging?.past60 || 0) + (parsedAging?.past90 || 0);
+  if (!parsedAging || (agingSum === 0 && parsedTotals.balanceDue > 0)) {
+    parsedAging = {
+      current: parsedTotals.balanceDue,
+      past30: 0,
+      past60: 0,
+      past90: 0
+    };
+  }
 
   return {
     id: b.id,
@@ -78,22 +117,23 @@ const formatBill = (b) => {
     patientName: patientFullName,
     patientAddress: ptAddr,
     // CMS-1500: Individual patient address components
-    patientStreet: pt?.street || '',
-    patientCity: pt?.city || '',
-    patientState: pt?.state || '',
-    patientZip: pt?.zipCode || '',
-    patientPhone: pt?.phone || '',
+    patientStreet: ptStreet || b.patientStreet || '',
+    patientCity: ptCity || b.patientCity || '',
+    patientState: ptState || b.patientState || '',
+    patientZip: ptZip || b.patientZip || '',
+    patientPhone: ptPhone || b.patientPhone || '',
     patientDob: pt?.dob || '',
     patientSex: pt?.sex || '',
     patientSystemId: pt?.patientId || '',
+    primaryGroupNumber: pt?.primaryGroupNumber || '',
     statementNumber: b.statementNumber || '',
     statementDate: b.statementDate || '',
     billToName: b.billToName || (b.case?.attorneyName ? `${b.case.attorneyName}` : ''),
     billToAddress: b.billToAddress || b.case?.lawFirmAddress || '',
     diagnosisCodes: dxCodes,
-    // CMS-1500: Referring provider from Case
-    referringProviderName: b.case?.referringProviderName || '',
-    referringProviderNpi: b.case?.referringProviderNpi || '',
+    // CMS-1500: Referring provider from Case or Patient (no billing provider fallbacks)
+    referringProviderName: b.referringProviderName || b.case?.referringProviderName || pt?.referringProvider || pt?.referringProviderName || '',
+    referringProviderNpi: b.referringProviderNpi || b.case?.referringProviderNpi || pt?.referringProviderNpi || '',
     // CMS-1500: Provider identifiers
     providerNpi: provIdentifiers.npi || '',
     providerTaxId: provIdentifiers.taxId || '',
@@ -109,9 +149,11 @@ const formatBill = (b) => {
     providerCity: provAddr.city || '',
     providerState: provAddr.state || '',
     providerZip: provAddr.zipCode || '',
-    // CMS-1500: Case details for accident/illness dates
+    // CMS-1500: Case details for accident/illness dates and insurance info
     accidentDate: b.case?.accidentDate || '',
     accidentState: b.case?.accidentState || '',
+    insuranceCompany: b.case?.insuranceCompany || '',
+    insurancePolicyNumber: b.case?.insurancePolicyNumber || '',
     attorneyName: b.case?.attorneyName || '',
     attorneyAddress: b.case?.attorneyAddress || b.case?.lawFirmAddress || '',
     status: b.status,
@@ -119,7 +161,7 @@ const formatBill = (b) => {
     totals: parsedTotals,
     totalPayments: parsedTotals.totalPayments || 0,
     balanceDue: parsedTotals.balanceDue || 0,
-    aging: typeof b.aging === 'string' ? JSON.parse(b.aging) : b.aging || { current: 0, past30: 0, past60: 0, past90: 0 },
+    aging: parsedAging,
     createdAt: b.createdAt
   };
 };
@@ -148,7 +190,7 @@ const recalculateBillTotals = async (billId) => {
     totalAdjustments += adj;
   }
 
-  const balanceDue = totalCharges - (totalPayments + totalAdjustments);
+  const balanceDue = Math.max(0, totalCharges - (totalPayments + totalAdjustments));
 
   const totals = {
     totalCharges: Number(totalCharges.toFixed(2)),
@@ -327,7 +369,7 @@ export const getFourBillsByCase = async (req, res) => {
       });
     }
 
-    const bills = await prisma.bill.findMany({
+    let bills = await prisma.bill.findMany({
       where: {
         caseId: targetCase.id
       },
@@ -341,6 +383,82 @@ export const getFourBillsByCase = async (req, res) => {
         }
       }
     });
+
+    const providerIds = ['prov-josmic', 'prov-davs', 'prov-anik', 'prov-counselor', 'prov-tpi', 'prov-tecar'];
+    let createdAny = false;
+    
+    for (const pId of providerIds) {
+      const existing = bills.find(b => b.providerId === pId);
+      if (!existing) {
+        try {
+          const providerKey = pId.replace('prov-', '');
+          const newBillId = `bill-${providerKey}-${targetCase.id}`;
+          const statementNum = `${Math.floor(100000 + Math.random() * 900000)}`;
+          const statementDate = targetCase.initialDate || targetCase.accidentDate || new Date().toISOString().split('T')[0];
+          
+          const defaultLines = getDefaultServiceLinesForProvider(pId, targetCase.accidentDate || targetCase.initialDate);
+          
+          let totalCharges = 0;
+          defaultLines.forEach(l => { totalCharges += Number(l.charge) || 0; });
+          
+          const createdBill = await prisma.bill.create({
+            data: {
+              id: newBillId,
+              caseId: targetCase.id,
+              providerId: pId,
+              invoiceNumber: `INV-${providerKey.toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`,
+              statementNumber: statementNum,
+              statementDate: statementDate,
+              billToName: targetCase.attorneyName || targetCase.lawFirm || '',
+              billToAddress: targetCase.attorneyAddress || '',
+              status: 'ACTIVE',
+              totals: { totalCharges, totalPayments: 0, totalAdjustments: 0, balanceDue: totalCharges },
+              aging: { current: totalCharges, past30: 0, past60: 0, past90: 0 }
+            }
+          });
+
+          for (const line of defaultLines) {
+            await prisma.serviceLine.create({
+              data: {
+                billId: createdBill.id,
+                dos: line.dos || statementDate,
+                dateOfService: line.dos || statementDate,
+                cptCode: line.cptCode,
+                description: line.description || '',
+                modifier1: line.modifier1 || '',
+                modifier2: line.modifier2 || '',
+                units: line.units || 1,
+                charge: line.charge,
+                payments: { insurance: 0, patient: 0, other: 0 },
+                adjustments: 0,
+                balance: line.charge,
+                lineBalance: line.charge
+              }
+            });
+          }
+          createdAny = true;
+        } catch (e) {
+          console.warn(`Could not auto-create bill for ${pId}:`, e.message);
+        }
+      }
+    }
+
+    if (createdAny) {
+      bills = await prisma.bill.findMany({
+        where: {
+          caseId: targetCase.id
+        },
+        include: {
+          serviceLines: true,
+          provider: true,
+          case: {
+            include: {
+              patient: true
+            }
+          }
+        }
+      });
+    }
 
     return res.status(200).json({
       caseId: targetCase.caseId || targetCase.id,
@@ -434,7 +552,7 @@ export const createBill = async (req, res) => {
       await prisma.case.update({
         where: { id: data.caseId },
         data: { diagnosisCodes: dxList }
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     // Check if the bill already exists to prevent duplicate insertion error
@@ -672,6 +790,11 @@ export const postAdjustment = async (req, res) => {
   const { id } = req.params;
   const { lineIndex, amount, reason } = req.body;
 
+  const adjAmount = parseFloat(amount);
+  if (isNaN(adjAmount) || adjAmount <= 0) {
+    return res.status(400).json({ error: 'Please enter a valid adjustment amount.' });
+  }
+
   try {
     const bill = await prisma.bill.findUnique({
       where: { id },
@@ -682,48 +805,57 @@ export const postAdjustment = async (req, res) => {
       return res.status(404).json({ error: 'Bill not found.' });
     }
 
+    // Check bill overall remaining balance
+    const parsedTotals = typeof bill.totals === 'string' ? JSON.parse(bill.totals) : (bill.totals || {});
+    const billBalanceDue = parsedTotals.balanceDue !== undefined ? Number(parsedTotals.balanceDue) : 0;
+
+    if (billBalanceDue <= 0) {
+      return res.status(400).json({ error: 'Bill is already fully settled ($0 balance). No further adjustments can be posted.' });
+    }
+
     const lines = bill.serviceLines || [];
     let targetLine = (lineIndex !== undefined && lines[lineIndex])
       ? lines[lineIndex]
       : lines.find(l => Number(l.lineBalance) > 0) || lines[0];
 
     if (!targetLine) {
-      const lineId = `srv-adj-${Date.now()}`;
-      targetLine = await prisma.serviceLine.create({
-        data: {
-          id: lineId,
-          billId: id,
-          dos: new Date().toLocaleDateString('en-US'),
-          dateOfService: new Date().toLocaleDateString('en-US'),
-          cptCode: '99204',
-          description: 'Adjustment Allocation',
-          charge: parseFloat(amount) || 0,
-          adjustments: parseFloat(amount) || 0,
-          balance: 0,
-          lineBalance: 0,
-          insurancePayment: 0,
-          patientPayment: 0,
-          otherPayment: 0
-        }
-      });
-    } else {
-      const insurancePayment = Number(targetLine.insurancePayment) || 0;
-      const patientPayment = Number(targetLine.patientPayment) || 0;
-      const otherPayment = Number(targetLine.otherPayment) || 0;
+      return res.status(400).json({ error: 'No active service lines available for adjustment.' });
+    }
 
-      const adjustments = (Number(targetLine.adjustments) || 0) + parseFloat(amount);
-      const totalLinePay = insurancePayment + patientPayment + otherPayment;
-      const lineBalance = Math.max(0, Number(targetLine.charge) - (totalLinePay + adjustments));
+    const insurancePayment = Number(targetLine.insurancePayment) || 0;
+    const patientPayment = Number(targetLine.patientPayment) || 0;
+    const otherPayment = Number(targetLine.otherPayment) || 0;
+    const currentLineAdj = Number(targetLine.adjustments) || 0;
+    const totalLinePay = insurancePayment + patientPayment + otherPayment;
+    const lineCharge = Number(targetLine.charge) || 0;
 
-      await prisma.serviceLine.update({
-        where: { id: targetLine.id },
-        data: {
-          adjustments,
-          balance: lineBalance,
-          lineBalance
-        }
+    // Remaining balance on the target line
+    const maxLineAdjAllowed = Math.max(0, lineCharge - (totalLinePay + currentLineAdj));
+
+    // Effective maximum allowed adjustment (cannot exceed remaining bill balance OR remaining line balance)
+    const maxAllowed = Math.min(billBalanceDue, maxLineAdjAllowed);
+
+    if (maxAllowed <= 0) {
+      return res.status(400).json({ error: 'Target service line has a $0 balance. No further adjustments can be applied.' });
+    }
+
+    if (adjAmount > maxAllowed) {
+      return res.status(400).json({
+        error: `Adjustment amount ($${adjAmount.toFixed(2)}) exceeds maximum allowable remaining balance ($${maxAllowed.toFixed(2)}).`
       });
     }
+
+    const adjustments = currentLineAdj + adjAmount;
+    const lineBalance = Math.max(0, lineCharge - (totalLinePay + adjustments));
+
+    await prisma.serviceLine.update({
+      where: { id: targetLine.id },
+      data: {
+        adjustments,
+        balance: lineBalance,
+        lineBalance
+      }
+    });
 
     // Create Transaction Record
     await prisma.transaction.create({
@@ -732,7 +864,7 @@ export const postAdjustment = async (req, res) => {
         billId: id,
         transactionType: 'ADJUSTMENT',
         source: 'WRITE_OFF',
-        amount: parseFloat(amount),
+        amount: adjAmount,
         notes: reason || 'Adjustment write off'
       }
     });
@@ -922,17 +1054,30 @@ export const getOverviewStats = async (req, res) => {
       }
     });
 
+    const allProviders = await prisma.provider.findMany();
+
     let totalBilled = 0;
     let totalPayments = 0;
     let totalAdjustments = 0;
     let balanceDue = 0;
 
-    const providerMap = {
-      'prov-josmic': { name: 'JOSMIC Wellness Center', specialty: 'Pain Management', total: 0, paid: 0, balance: 0, status: 'Finalised', color: 'teal' },
-      'prov-davs': { name: "DAV'S Anatomy", specialty: 'Shockwave (ESWT)', total: 0, paid: 0, balance: 0, status: 'Issued', color: 'blue' },
-      'prov-anik': { name: 'ANIK Laser Therapy', specialty: 'Laser Therapy', total: 0, paid: 0, balance: 0, status: 'Issued', color: 'violet' },
-      'prov-counselor': { name: 'Counselor Practice (Hope Behavioral)', specialty: 'Counseling & Mental Health', total: 0, paid: 0, balance: 0, status: 'Issued', color: 'amber' }
-    };
+    const providerMap = {};
+    const colors = ['teal', 'blue', 'violet', 'amber', 'emerald', 'rose', 'indigo', 'cyan'];
+    
+    allProviders.forEach((p, idx) => {
+      providerMap[p.id] = {
+        name: p.name || 'Unknown',
+        specialty: p.serviceCategory || 'Practice Provider',
+        total: 0,
+        paid: 0,
+        balance: 0,
+        status: 'Issued',
+        color: colors[idx % colors.length]
+      };
+    });
+
+    // Specific overrides for demo
+    if (providerMap['prov-josmic']) providerMap['prov-josmic'].status = 'Finalised';
 
     let current = 0;
     let past30 = 0;
@@ -946,7 +1091,9 @@ export const getOverviewStats = async (req, res) => {
       const chg = totals.totalCharges || 0;
       const pmt = totals.totalPayments || 0;
       const adj = totals.totalAdjustments || 0;
-      const bal = totals.balanceDue || (chg - pmt - adj);
+      
+      // Fix: Outstanding Balance = Total Billed - Amount Collected
+      const bal = chg - pmt;
 
       totalBilled += chg;
       totalPayments += pmt;
@@ -958,10 +1105,23 @@ export const getOverviewStats = async (req, res) => {
       past60 += (aging.past60 || 0);
       past90 += (aging.past90 || 0);
 
-      if (providerMap[b.providerId]) {
-        providerMap[b.providerId].total += chg;
-        providerMap[b.providerId].paid += pmt;
-        providerMap[b.providerId].balance += bal;
+      if (!providerMap[b.providerId]) {
+        providerMap[b.providerId] = {
+          name: b.provider?.name || 'Unknown',
+          specialty: b.provider?.serviceCategory || 'Practice Provider',
+          total: 0,
+          paid: 0,
+          balance: 0,
+          status: 'Issued',
+          color: 'slate'
+        };
+      }
+      
+      providerMap[b.providerId].total += chg;
+      providerMap[b.providerId].paid += pmt;
+      providerMap[b.providerId].balance += bal;
+      if (b.status === 'FINALISED_DEMO' || b.status === 'Finalised') {
+        providerMap[b.providerId].status = 'Finalised';
       }
     }
 

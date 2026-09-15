@@ -1,4 +1,5 @@
 import { prisma } from '../config/db.js';
+import { generateMasterPacket } from '../services/pdfService.js';
 
 /**
  * Format document matching frontend expectations
@@ -129,15 +130,26 @@ export const buildPatientPacket = async (req, res) => {
   }
 
   try {
-    const docCount = selectedDocIds.length;
-    return res.status(200).json({
-      success: true,
-      caseId,
-      bundledAt: new Date().toISOString(),
-      totalPages: Math.max(docCount * 2, 4),
-      status: 'PACKET_GENERATED',
-      downloadUrl: `https://practice-portal.internal/packets/${caseId}-demand-packet.pdf`
+    // Fetch case information
+    const caseInfo = await prisma.case.findUnique({
+      where: { id: caseId },
+      include: { patient: true }
     });
+
+    // Fetch document metadata
+    const documents = await prisma.document.findMany({
+      where: {
+        id: { in: selectedDocIds }
+      }
+    });
+
+    // Generate the PDF packet
+    const pdfBuffer = await generateMasterPacket(caseInfo, documents);
+
+    // Send the generated PDF
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename=Master_Legal_Packet_${caseId}.pdf`);
+    return res.send(pdfBuffer);
   } catch (error) {
     console.error('Error building patient packet:', error);
     return res.status(500).json({ error: 'Failed to build patient packet.' });

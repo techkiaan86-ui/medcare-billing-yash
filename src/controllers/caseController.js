@@ -12,6 +12,21 @@ const formatCase = (c) => {
   const patientFullName = p.firstName || p.lastName ? `${p.firstName || ''} ${p.lastName || ''}`.trim() : (c.patientName || '');
   const patientAddrStr = p.addressLine1 || p.street ? `${p.addressLine1 || p.street || ''}, ${p.city || ''} ${p.state || ''} ${p.zipCode || ''}`.trim() : (c.patientAddress || '');
 
+  let caseTotalBilling = 0;
+  let uniqueProviders = new Set();
+  
+  if (c.bills && Array.isArray(c.bills)) {
+    c.bills.forEach(bill => {
+      uniqueProviders.add(bill.providerId);
+      if (bill.totals) {
+        const t = typeof bill.totals === 'string' ? JSON.parse(bill.totals) : bill.totals;
+        if (t.totalCharges) {
+          caseTotalBilling += parseFloat(t.totalCharges) || 0;
+        }
+      }
+    });
+  }
+
   return {
     id: c.id,
     caseId: c.caseId,
@@ -64,7 +79,10 @@ const formatCase = (c) => {
     caseNotes: c.caseNotes || '',
     assignedProviderIds: typeof c.assignedProviderIds === 'string' ? JSON.parse(c.assignedProviderIds) : (c.assignedProviderIds || ['prov-josmic', 'prov-davs', 'prov-anik', 'prov-counselor']),
     status: c.status || 'ACTIVE',
-    createdAt: c.createdAt
+    createdAt: c.createdAt,
+    bills: c.bills || [],
+    caseTotalBilling,
+    connectedProviderLedgersCount: uniqueProviders.size
   };
 };
 
@@ -95,7 +113,8 @@ export const getCases = async (req, res) => {
     let cases = await prisma.case.findMany({
       where,
       include: {
-        patient: true
+        patient: true,
+        bills: true
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -129,7 +148,8 @@ export const getCaseById = async (req, res) => {
         ]
       },
       include: {
-        patient: true
+        patient: true,
+        bills: true
       }
     });
 

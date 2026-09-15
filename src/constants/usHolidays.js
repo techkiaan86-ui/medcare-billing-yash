@@ -99,3 +99,64 @@ export const isUSFederalHoliday = (dateStr) => {
 
   return { isHoliday: false };
 };
+
+export const getTodayDateStr = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+export const isPastDate = (dateStr) => {
+  if (!dateStr) return false;
+  return dateStr < getTodayDateStr();
+};
+
+export const isWeekend = (dateStr) => {
+  if (!dateStr) return { isWeekend: false, dayName: '' };
+  const d = new Date(dateStr + 'T00:00:00');
+  const day = d.getDay();
+  if (day === 0) return { isWeekend: true, dayName: 'Sunday' };
+  if (day === 6) return { isWeekend: true, dayName: 'Saturday' };
+  return { isWeekend: false, dayName: '' };
+};
+
+export const isClinicClosed = (dateStr) => {
+  if (!dateStr) return { isClosed: false, reason: '' };
+
+  if (isPastDate(dateStr)) {
+    return {
+      isClosed: true,
+      isPast: true,
+      isWeekend: false,
+      isHoliday: false,
+      reason: 'Past Date - Appointments cannot be scheduled for past dates'
+    };
+  }
+
+  const weekendCheck = isWeekend(dateStr);
+  if (weekendCheck.isWeekend) {
+    return {
+      isClosed: true,
+      isPast: false,
+      isWeekend: true,
+      isHoliday: false,
+      reason: `Weekend (${weekendCheck.dayName}) - Clinic is closed`
+    };
+  }
+
+  const holidayCheck = isUSFederalHoliday(dateStr);
+  if (holidayCheck.isHoliday) {
+    return {
+      isClosed: true,
+      isPast: false,
+      isWeekend: false,
+      isHoliday: true,
+      reason: `US Federal Holiday (${holidayCheck.name}) - Clinic is closed`,
+      holidayName: holidayCheck.name
+    };
+  }
+
+  return { isClosed: false, isPast: false, isWeekend: false, isHoliday: false, reason: '' };
+};

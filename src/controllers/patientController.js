@@ -5,6 +5,25 @@ import { prisma } from '../config/db.js';
  */
 const formatPatient = (p) => {
   if (!p) return null;
+  let totalPracticeAR = 0;
+  let uniqueProviders = new Set();
+
+  if (p.cases && Array.isArray(p.cases)) {
+    p.cases.forEach(c => {
+      if (c.bills && Array.isArray(c.bills)) {
+        c.bills.forEach(bill => {
+          uniqueProviders.add(bill.providerId);
+          if (bill.totals) {
+            const t = typeof bill.totals === 'string' ? JSON.parse(bill.totals) : bill.totals;
+            if (t.totalCharges) {
+              totalPracticeAR += parseFloat(t.totalCharges) || 0;
+            }
+          }
+        });
+      }
+    });
+  }
+
   return {
     id: p.id,
     patientId: p.patientId,
@@ -16,6 +35,7 @@ const formatPatient = (p) => {
     phone: p.phone,
     email: p.email,
     ssn: p.ssn,
+    primaryGroupNumber: p.primaryGroupNumber || '',
     address: {
       street: p.street || '',
       suite: p.suite || '',
@@ -23,11 +43,16 @@ const formatPatient = (p) => {
       state: p.state || '',
       zipCode: p.zipCode || ''
     },
+    location: p.location || '',
     communicationPref: p.communicationPref,
     consentStatus: p.consentStatus,
+    referringProvider: p.referringProvider || p.cases?.[0]?.referringProviderName || '',
+    referringProviderNpi: p.referringProviderNpi || p.cases?.[0]?.referringProviderNpi || '',
     assignedProviderIds: typeof p.assignedProviderIds === 'string' ? JSON.parse(p.assignedProviderIds) : p.assignedProviderIds,
     status: p.status,
-    createdAt: p.createdAt
+    createdAt: p.createdAt,
+    totalPracticeAR,
+    connectedProviderBillsCount: uniqueProviders.size
   };
 };
 
@@ -61,6 +86,13 @@ export const getPatients = async (req, res) => {
 
     let patients = await prisma.patient.findMany({
       where,
+      include: {
+        cases: {
+          include: {
+            bills: true
+          }
+        }
+      },
       orderBy: { createdAtDate: 'desc' }
     });
 
@@ -92,6 +124,13 @@ export const getPatientById = async (req, res) => {
           { id },
           { patientId: id }
         ]
+      },
+      include: {
+        cases: {
+          include: {
+            bills: true
+          }
+        }
       }
     });
 
@@ -140,11 +179,13 @@ export const createPatient = async (req, res) => {
         phone: data.phone || '',
         email: data.email || '',
         ssn: data.ssn || '',
+        primaryGroupNumber: data.primaryGroupNumber || '',
         street,
         suite,
         city,
         state,
         zipCode,
+        location: data.location || '',
         communicationPref: data.communicationPref || 'SMS',
         consentStatus: data.consentStatus || 'SIGNED',
         assignedProviderIds: data.assignedProviderIds || ['prov-josmic', 'prov-davs', 'prov-anik', 'prov-counselor'],
@@ -153,7 +194,32 @@ export const createPatient = async (req, res) => {
       }
     });
 
-    return res.status(201).json(formatPatient(newPatient));
+    // Create initial active Case for patient to store referring physician, NPI, and attorney info
+    const generatedCaseId = `case-${Date.now()}`;
+    const generatedCaseNum = `CASE-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    await prisma.case.create({
+      data: {
+        id: generatedCaseId,
+        caseId: generatedCaseNum,
+        patientId: newPatient.id,
+        accidentType: data.accidentType || 'AUTO_ACCIDENT',
+        accidentState: state || 'TX',
+        referringProviderName: data.referringProvider || data.referringProviderName || '',
+        referringProviderNpi: data.referringProviderNpi || '',
+        attorneyName: data.referringAttorney || data.attorneyName || '',
+        lawFirm: data.lawFirm || (data.referringAttorney ? `${data.referringAttorney}` : ''),
+        status: 'ACTIVE'
+      }
+    });
+
+    const resPatient = {
+      ...newPatient,
+      referringProvider: data.referringProvider || data.referringProviderName || '',
+      referringProviderNpi: data.referringProviderNpi || ''
+    };
+
+    return res.status(201).json(formatPatient(resPatient));
   } catch (error) {
     console.error('Error registering patient profile:', error);
     return res.status(500).json({ error: 'Failed to create patient profile.' });
@@ -199,11 +265,13 @@ export const updatePatient = async (req, res) => {
         phone: updates.phone || existing.phone,
         email: updates.email || existing.email,
         ssn: updates.ssn || existing.ssn,
+        primaryGroupNumber: updates.primaryGroupNumber !== undefined ? updates.primaryGroupNumber : existing.primaryGroupNumber,
         street,
         suite,
         city,
         state,
         zipCode,
+        location: updates.location !== undefined ? updates.location : existing.location,
         communicationPref: updates.communicationPref || existing.communicationPref,
         consentStatus: updates.consentStatus || existing.consentStatus,
         assignedProviderIds: updates.assignedProviderIds || existing.assignedProviderIds,
@@ -211,7 +279,25 @@ export const updatePatient = async (req, res) => {
       }
     });
 
-    return res.status(200).json(formatPatient(updated));
+    if (updates.referringProvider !== undefined || updates.referringProviderName !== undefined || updates.referringProviderNpi !== undefined) {
+      const refName = updates.referringProvider || updates.referringProviderName;
+      const refNpi = updates.referringProviderNpi;
+      await prisma.case.updateMany({
+        where: { patientId: existing.id },
+        data: {
+          ...(refName !== undefined ? { referringProviderName: refName } : {}),
+          ...(refNpi !== undefined ? { referringProviderNpi: refNpi } : {})
+        }
+      });
+    }
+
+    const updatedRes = {
+      ...updated,
+      referringProvider: updates.referringProvider || updates.referringProviderName || existing.referringProvider || '',
+      referringProviderNpi: updates.referringProviderNpi || existing.referringProviderNpi || ''
+    };
+
+    return res.status(200).json(formatPatient(updatedRes));
   } catch (error) {
     console.error('Error updating patient profile:', error);
     return res.status(500).json({ error: 'Failed to update patient profile.' });

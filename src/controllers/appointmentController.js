@@ -1,6 +1,6 @@
 import { prisma } from '../config/db.js';
 import { sendAppointmentEmailNotification, sendBookingConfirmationEmail } from '../services/notificationService.js';
-import { isUSFederalHoliday } from '../constants/usHolidays.js';
+import { isUSFederalHoliday, isClinicClosed } from '../constants/usHolidays.js';
 
 /**
  * Helper to format a DB Appointment record matching the frontend schema
@@ -105,12 +105,13 @@ export const createAppointment = async (req, res) => {
     return res.status(400).json({ error: 'date and startTime are required.' });
   }
 
-  // Check if date lands on an official US Federal Holiday
-  const holidayCheck = isUSFederalHoliday(data.date);
-  if (holidayCheck.isHoliday) {
-    return res.status(400).json({
-      error: `Cannot schedule on official US Federal Holiday: ${holidayCheck.name}. Clinic is closed.`
-    });
+  // Check clinic closure & past dates
+  const closedCheck = isClinicClosed(data.date);
+  if (closedCheck.isPast) {
+    return res.status(400).json({ error: 'Appointments cannot be scheduled for past dates.' });
+  }
+  if (closedCheck.isClosed && !data.holidayOverride) {
+    return res.status(400).json({ error: closedCheck.reason });
   }
 
   const generatedId = `apt-${Date.now()}`;
