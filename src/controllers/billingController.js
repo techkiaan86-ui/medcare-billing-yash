@@ -369,7 +369,7 @@ export const getFourBillsByCase = async (req, res) => {
       });
     }
 
-    let bills = await prisma.bill.findMany({
+    const bills = await prisma.bill.findMany({
       where: {
         caseId: targetCase.id
       },
@@ -383,82 +383,6 @@ export const getFourBillsByCase = async (req, res) => {
         }
       }
     });
-
-    const providerIds = ['prov-josmic', 'prov-davs', 'prov-anik', 'prov-counselor', 'prov-tpi', 'prov-tecar'];
-    let createdAny = false;
-    
-    for (const pId of providerIds) {
-      const existing = bills.find(b => b.providerId === pId);
-      if (!existing) {
-        try {
-          const providerKey = pId.replace('prov-', '');
-          const newBillId = `bill-${providerKey}-${targetCase.id}`;
-          const statementNum = `${Math.floor(100000 + Math.random() * 900000)}`;
-          const statementDate = targetCase.initialDate || targetCase.accidentDate || new Date().toISOString().split('T')[0];
-          
-          const defaultLines = getDefaultServiceLinesForProvider(pId, targetCase.accidentDate || targetCase.initialDate);
-          
-          let totalCharges = 0;
-          defaultLines.forEach(l => { totalCharges += Number(l.charge) || 0; });
-          
-          const createdBill = await prisma.bill.create({
-            data: {
-              id: newBillId,
-              caseId: targetCase.id,
-              providerId: pId,
-              invoiceNumber: `INV-${providerKey.toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`,
-              statementNumber: statementNum,
-              statementDate: statementDate,
-              billToName: targetCase.attorneyName || targetCase.lawFirm || '',
-              billToAddress: targetCase.attorneyAddress || '',
-              status: 'ACTIVE',
-              totals: { totalCharges, totalPayments: 0, totalAdjustments: 0, balanceDue: totalCharges },
-              aging: { current: totalCharges, past30: 0, past60: 0, past90: 0 }
-            }
-          });
-
-          for (const line of defaultLines) {
-            await prisma.serviceLine.create({
-              data: {
-                billId: createdBill.id,
-                dos: line.dos || statementDate,
-                dateOfService: line.dos || statementDate,
-                cptCode: line.cptCode,
-                description: line.description || '',
-                modifier1: line.modifier1 || '',
-                modifier2: line.modifier2 || '',
-                units: line.units || 1,
-                charge: line.charge,
-                payments: { insurance: 0, patient: 0, other: 0 },
-                adjustments: 0,
-                balance: line.charge,
-                lineBalance: line.charge
-              }
-            });
-          }
-          createdAny = true;
-        } catch (e) {
-          console.warn(`Could not auto-create bill for ${pId}:`, e.message);
-        }
-      }
-    }
-
-    if (createdAny) {
-      bills = await prisma.bill.findMany({
-        where: {
-          caseId: targetCase.id
-        },
-        include: {
-          serviceLines: true,
-          provider: true,
-          case: {
-            include: {
-              patient: true
-            }
-          }
-        }
-      });
-    }
 
     return res.status(200).json({
       caseId: targetCase.caseId || targetCase.id,
