@@ -1006,9 +1006,6 @@ export const getOverviewStats = async (req, res) => {
       };
     });
 
-    // Specific overrides for demo
-    if (providerMap['prov-josmic']) providerMap['prov-josmic'].status = 'Finalised';
-
     let current = 0;
     let past30 = 0;
     let past60 = 0;
@@ -1136,12 +1133,21 @@ export const getPracticeReports = async (req, res) => {
       }
     });
 
-    const providerMap = {
-      'prov-josmic': { provider: 'JOSMIC', charges: 0, payments: 0, adjustments: 0, balance: 0, sessions: 0, color: '#0d9488' },
-      'prov-davs': { provider: "DAV'S Anatomy", charges: 0, payments: 0, adjustments: 0, balance: 0, sessions: 0, color: '#3b82f6' },
-      'prov-anik': { provider: 'ANIK Laser', charges: 0, payments: 0, adjustments: 0, balance: 0, sessions: 0, color: '#7c3aed' },
-      'prov-counselor': { provider: 'Counselor', charges: 0, payments: 0, adjustments: 0, balance: 0, sessions: 0, color: '#f59e0b' }
-    };
+    const allProviders = await prisma.provider.findMany();
+    const providerMap = {};
+    const colors = ['#0d9488', '#3b82f6', '#7c3aed', '#f59e0b', '#10b981', '#f43f5e', '#6366f1', '#06b6d4'];
+
+    allProviders.forEach((p, idx) => {
+      providerMap[p.id] = {
+        provider: p.name || 'Unknown',
+        charges: 0,
+        payments: 0,
+        adjustments: 0,
+        balance: 0,
+        sessions: 0,
+        color: colors[idx % colors.length]
+      };
+    });
 
     const monthlyMap = {};
     const sessionMap = {};
