@@ -13,7 +13,7 @@ export const getAllModalities = async (req, res) => {
 };
 
 export const createModality = async (req, res) => {
-  const { name, providerId, enabled, cptCode, fee, duration, template } = req.body;
+  const { name, providerId, enabled, cptCode, fee, duration, template, status } = req.body;
   if (!name) {
     return res.status(400).json({ error: 'Name is required' });
   }
@@ -28,6 +28,7 @@ export const createModality = async (req, res) => {
         fee: fee || '',
         duration: duration || '',
         template: template || '',
+        status: status || 'ACTIVE',
       },
     });
     res.status(201).json(newModality);
