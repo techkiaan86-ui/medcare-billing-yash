@@ -94,6 +94,15 @@ model Patient {
   insuranceAdjusterPhone String?     @map("insurance_adjuster_phone") @db.VarChar(20)
   secondaryInsuranceCompany String?  @map("secondary_insurance_company") @db.VarChar(150)
   secondaryPolicyNumber String?      @map("secondary_policy_number") @db.VarChar(100)
+  knownAllergies      String?        @map("known_allergies") @db.VarChar(255)
+  allergyReactionSeverity String?    @map("allergy_reaction_severity") @db.VarChar(100)
+  currentMedications  String?        @map("current_medications") @db.Text
+  pastMedicalHistory  String?        @map("past_medical_history") @db.Text
+  selectedInjuryAreas Json?          @map("selected_injury_areas")
+  accidentDate        String?        @map("accident_date_str") @db.VarChar(50)
+  mechanismOfInjury   String?        @map("mechanism_of_injury") @db.VarChar(255)
+  patientNotes        String?        @map("patient_notes") @db.Text
+  hipaaConsentSigned  Boolean?       @map("hipaa_consent_signed")
   cases               Case[]
   appointments        Appointment[]
   clinicalNotes       ClinicalNote[]
