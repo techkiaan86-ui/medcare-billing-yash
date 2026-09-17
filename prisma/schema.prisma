@@ -81,6 +81,35 @@ model Patient {
   status              String         @default("ACTIVE") @db.VarChar(50)
   createdAt           String?        @map("created_at_str") @db.VarChar(30)
   createdAtDate       DateTime       @default(now()) @map("created_at")
+  maritalStatus       String?        @map("marital_status") @db.VarChar(50)
+  driversLicense      String?        @map("drivers_license") @db.VarChar(50)
+  driversLicenseState String?        @map("drivers_license_state") @db.VarChar(10)
+  language            String?        @db.VarChar(50)
+  ethnicity           String?        @db.VarChar(100)
+  employmentStatus    String?        @map("employment_status") @db.VarChar(50)
+  employerName        String?        @map("employer_name") @db.VarChar(150)
+  emergencyContactName String?       @map("emergency_contact_name") @db.VarChar(150)
+  emergencyContactRelation String?   @map("emergency_contact_relation") @db.VarChar(50)
+  emergencyContactPhone String?      @map("emergency_contact_phone") @db.VarChar(20)
+  insuranceType       String?        @map("insurance_type") @db.VarChar(100)
+  primaryInsuranceCompany String?    @map("primary_insurance_company") @db.VarChar(150)
+  primaryPolicyNumber String?        @map("primary_policy_number") @db.VarChar(100)
+  primaryInsuranceMemberId String?   @map("primary_insurance_member_id") @db.VarChar(100)
+  policyHolderName    String?        @map("policy_holder_name") @db.VarChar(150)
+  policyHolderDob     String?        @map("policy_holder_dob") @db.VarChar(20)
+  insuranceAdjusterName String?      @map("insurance_adjuster_name") @db.VarChar(100)
+  insuranceAdjusterPhone String?     @map("insurance_adjuster_phone") @db.VarChar(20)
+  secondaryInsuranceCompany String?  @map("secondary_insurance_company") @db.VarChar(150)
+  secondaryPolicyNumber String?      @map("secondary_policy_number") @db.VarChar(100)
+  knownAllergies      String?        @map("known_allergies") @db.VarChar(255)
+  allergyReactionSeverity String?    @map("allergy_reaction_severity") @db.VarChar(100)
+  currentMedications  String?        @map("current_medications") @db.Text
+  pastMedicalHistory  String?        @map("past_medical_history") @db.Text
+  selectedInjuryAreas Json?          @map("selected_injury_areas")
+  accidentDate        String?        @map("accident_date_str") @db.VarChar(50)
+  mechanismOfInjury   String?        @map("mechanism_of_injury") @db.VarChar(255)
+  patientNotes        String?        @map("patient_notes") @db.Text
+  hipaaConsentSigned  Boolean?       @map("hipaa_consent_signed")
   cases               Case[]
   appointments        Appointment[]
   clinicalNotes       ClinicalNote[]
@@ -323,4 +352,40 @@ model GeneralSetting {
   data Json
 
   @@map("general_settings")
+}
+
+model ICDCode {
+  id          String   @id @default(uuid()) @db.VarChar(50)
+  code        String   @unique @db.VarChar(20)
+  description String   @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("icd_codes")
+}
+
+model ServiceModality {
+  id           String   @id @default(uuid()) @db.VarChar(50)
+  name         String   @db.VarChar(100)
+  providerId   String?  @map("provider_id") @db.VarChar(50)
+  enabled      Boolean  @default(false)
+  cptCode      String   @map("cpt_code") @db.VarChar(50)
+  fee          String   @db.VarChar(50)
+  duration     String   @db.VarChar(50)
+  template     String   @db.VarChar(100)
+  status       String   @default("ACTIVE") @db.VarChar(50)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("service_modalities")
+}
+
+model CptCode {
+  id          String   @id @default(uuid()) @db.VarChar(50)
+  code        String   @unique @db.VarChar(50)
+  description String   @db.VarChar(255)
+  fee         String   @db.VarChar(50)
+  category    String   @db.VarChar(100)
+  modifiers   String   @db.VarChar(100)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("cpt_codes")
 }
