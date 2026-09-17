@@ -18,6 +18,7 @@ import attorneyRoutes from './src/routes/attorneyRoutes.js';
 import notificationRoutes from './src/routes/notificationRoutes.js';
 import settingsRoutes from './src/routes/settingsRoutes.js';
 import icdRoutes from './src/routes/icdRoutes.js';
+import modalityRoutes from './src/routes/modalityRoutes.js';
 import { logger } from './src/config/logger.js';
 
 // Load environment variables
@@ -77,6 +78,7 @@ app.use('/v1/staff', staffRoutes);
 app.use('/v1/attorneys', attorneyRoutes);
 app.use('/v1/settings', settingsRoutes);
 app.use('/v1/icd-codes', icdRoutes);
+app.use('/v1/modalities', modalityRoutes);
 
 // Root landing endpoint
 app.get('/', (req, res) => {

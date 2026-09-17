@@ -355,3 +355,18 @@ model ICDCode {
 
   @@map("icd_codes")
 }
+
+model ServiceModality {
+  id           String   @id @default(uuid()) @db.VarChar(50)
+  name         String   @db.VarChar(100)
+  providerId   String?  @map("provider_id") @db.VarChar(50)
+  enabled      Boolean  @default(false)
+  cptCode      String   @map("cpt_code") @db.VarChar(50)
+  fee          String   @db.VarChar(50)
+  duration     String   @db.VarChar(50)
+  template     String   @db.VarChar(100)
+  status       String   @default("ACTIVE") @db.VarChar(50)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@map("service_modalities")
+}
