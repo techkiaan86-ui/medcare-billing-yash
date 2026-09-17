@@ -20,6 +20,7 @@ import settingsRoutes from './src/routes/settingsRoutes.js';
 import icdRoutes from './src/routes/icdRoutes.js';
 import modalityRoutes from './src/routes/modalityRoutes.js';
 import cptRoutes from './src/routes/cptRoutes.js';
+import modifierRoutes from './src/routes/modifierRoutes.js';
 import { logger } from './src/config/logger.js';
 
 // Load environment variables
@@ -81,6 +82,7 @@ app.use('/v1/settings', settingsRoutes);
 app.use('/v1/icd-codes', icdRoutes);
 app.use('/v1/modalities', modalityRoutes);
 app.use('/v1/cpt', cptRoutes);
+app.use('/v1/modifiers', modifierRoutes);
 
 // Root landing endpoint
 app.get('/', (req, res) => {
