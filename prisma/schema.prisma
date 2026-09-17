@@ -346,3 +346,12 @@ model GeneralSetting {
 
   @@map("general_settings")
 }
+
+model ICDCode {
+  id          String   @id @default(uuid()) @db.VarChar(50)
+  code        String   @unique @db.VarChar(20)
+  description String   @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("icd_codes")
+}
