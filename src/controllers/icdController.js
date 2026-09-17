@@ -15,7 +15,7 @@ export const getAllICDCodes = async (req, res) => {
 
 // Create a new ICD code
 export const createICDCode = async (req, res) => {
-  const { code, description } = req.body;
+  const { code, description, category } = req.body;
   if (!code || !description) {
     return res.status(400).json({ error: 'Code and description are required' });
   }
@@ -25,6 +25,7 @@ export const createICDCode = async (req, res) => {
       data: {
         code: code.trim().toUpperCase(),
         description: description.trim(),
+        category: category?.trim() || 'General',
       },
     });
     res.status(201).json(newCode);
@@ -40,7 +41,7 @@ export const createICDCode = async (req, res) => {
 // Update an existing ICD code
 export const updateICDCode = async (req, res) => {
   const { id } = req.params;
-  const { code, description } = req.body;
+  const { code, description, category } = req.body;
 
   try {
     const updatedCode = await prisma.iCDCode.update({
@@ -48,6 +49,7 @@ export const updateICDCode = async (req, res) => {
       data: {
         ...(code && { code: code.trim().toUpperCase() }),
         ...(description && { description: description.trim() }),
+        ...(category && { category: category.trim() }),
       },
     });
     res.status(200).json(updatedCode);

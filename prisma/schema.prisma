@@ -70,13 +70,7 @@ model Patient {
   location            String?        @db.VarChar(200)
   communicationPref   String?        @map("communication_pref") @db.VarChar(50)
   consentStatus       String?        @map("consent_status") @db.VarChar(50)
-  maritalStatus         String?        @map("marital_status") @db.VarChar(50)
   relationshipToInsured String?        @map("relationship_to_insured") @db.VarChar(50)
-  employmentStatus      String?        @map("employment_status") @db.VarChar(100)
-  policyHolderName      String?        @map("policy_holder_name") @db.VarChar(150)
-  policyHolderDob       String?        @map("policy_holder_dob") @db.VarChar(20)
-  secondaryInsuranceCompany String?    @map("secondary_insurance_company") @db.VarChar(150)
-  secondaryPolicyNumber String?        @map("secondary_policy_number") @db.VarChar(100)
   assignedProviderIds Json?          @map("assigned_provider_ids")
   status              String         @default("ACTIVE") @db.VarChar(50)
   createdAt           String?        @map("created_at_str") @db.VarChar(30)
@@ -358,9 +352,19 @@ model ICDCode {
   id          String   @id @default(uuid()) @db.VarChar(50)
   code        String   @unique @db.VarChar(20)
   description String   @db.VarChar(255)
+  category    String   @default("General") @db.VarChar(100)
   createdAt   DateTime @default(now()) @map("created_at")
 
   @@map("icd_codes")
+}
+
+model Modifier {
+  id          String   @id @default(uuid()) @db.VarChar(50)
+  code        String   @unique @db.VarChar(20)
+  description String   @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("modifiers")
 }
 
 model ServiceModality {
