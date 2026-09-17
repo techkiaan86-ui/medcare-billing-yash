@@ -370,3 +370,15 @@ model ServiceModality {
 
   @@map("service_modalities")
 }
+
+model CptCode {
+  id          String   @id @default(uuid()) @db.VarChar(50)
+  code        String   @unique @db.VarChar(50)
+  description String   @db.VarChar(255)
+  fee         String   @db.VarChar(50)
+  category    String   @db.VarChar(100)
+  modifiers   String   @db.VarChar(100)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("cpt_codes")
+}
