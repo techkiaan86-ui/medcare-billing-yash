@@ -1,12 +1,10 @@
 import PDFDocument from 'pdfkit';
+import { PDFDocument as PDFLibDoc } from 'pdf-lib';
 
 /**
- * Generate a Medical-Legal Packet PDF
- * @param {Object} caseInfo - Case details
- * @param {Array} documents - Array of document metadata
- * @returns {Promise<Buffer>} - Resolves with the PDF Buffer
+ * Helper to generate the Cover Page Buffer using pdfkit
  */
-export const generateMasterPacket = (caseInfo, documents) => {
+const generateCoverPage = (caseInfo, documents) => {
   return new Promise((resolve, reject) => {
     try {
       const doc = new PDFDocument({ margin: 50 });
@@ -14,10 +12,9 @@ export const generateMasterPacket = (caseInfo, documents) => {
 
       doc.on('data', buffers.push.bind(buffers));
       doc.on('end', () => {
-        const pdfData = Buffer.concat(buffers);
-        resolve(pdfData);
+        resolve(Buffer.concat(buffers));
       });
-      doc.on('error', (err) => reject(err));
+      doc.on('error', reject);
 
       // Cover Page
       doc.fontSize(24).text('Master Medical-Legal Packet', { align: 'center' });
@@ -57,21 +54,54 @@ export const generateMasterPacket = (caseInfo, documents) => {
         });
       }
 
-      // Add a page break before actual documents (simulated)
-      documents.forEach((d, i) => {
-        doc.addPage();
-        doc.fontSize(20).text(`Document ${i + 1}: ${d.name}`, { align: 'center' });
-        doc.moveDown(2);
-        doc.fontSize(14).text('--- This is a placeholder for the actual document content ---', { align: 'center', italic: true });
-        doc.moveDown(1);
-        doc.fontSize(12).text(`Provider: ${d.providerName}`, { align: 'center' });
-        doc.text(`Type: ${d.type || d.documentType}`, { align: 'center' });
-      });
-
-      // Finalize the PDF
       doc.end();
     } catch (error) {
       reject(error);
     }
   });
+};
+
+/**
+ * Generate a Medical-Legal Packet PDF by merging real PDFs
+ */
+export const generateMasterPacket = async (caseInfo, documents) => {
+  try {
+    // 1. Generate Cover Page
+    const coverPageBuffer = await generateCoverPage(caseInfo, documents);
+    
+    // 2. Load Cover Page into pdf-lib
+    const masterPdf = await PDFLibDoc.load(coverPageBuffer);
+    
+    // 3. Fetch and merge all real documents
+    if (documents && documents.length > 0) {
+      for (const doc of documents) {
+        if (!doc.url || doc.url === '#' || doc.url.includes('dummy.pdf')) {
+          console.warn(`Skipping document ${doc.name} due to invalid URL: ${doc.url}`);
+          continue;
+        }
+        
+        try {
+          const res = await fetch(doc.url);
+          if (!res.ok) {
+            console.error(`Failed to fetch ${doc.name} from ${doc.url}. Status: ${res.status}`);
+            continue;
+          }
+          
+          const arrayBuffer = await res.arrayBuffer();
+          const extPdf = await PDFLibDoc.load(arrayBuffer);
+          const copiedPages = await masterPdf.copyPages(extPdf, extPdf.getPageIndices());
+          copiedPages.forEach((page) => masterPdf.addPage(page));
+        } catch (fetchErr) {
+          console.error(`Failed to merge document ${doc.name}:`, fetchErr);
+        }
+      }
+    }
+    
+    // 4. Save and return
+    const finalPdfBytes = await masterPdf.save();
+    return Buffer.from(finalPdfBytes);
+  } catch (error) {
+    console.error('Error generating master packet:', error);
+    throw error;
+  }
 };
