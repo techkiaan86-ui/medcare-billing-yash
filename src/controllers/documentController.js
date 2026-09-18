@@ -26,10 +26,11 @@ const formatDoc = (d) => {
  * Get documents list
  */
 export const getDocuments = async (req, res) => {
-  const { providerName, type } = req.query;
+  const { providerName, type, caseId } = req.query;
 
   try {
     const where = {};
+    if (caseId) where.caseId = caseId;
     if (providerName) where.providerName = providerName;
     if (type) {
       where.OR = [
