@@ -1,5 +1,14 @@
 import { prisma } from '../config/db.js';
 import { generateMasterPacket } from '../services/pdfService.js';
+import { v2 as cloudinary } from 'cloudinary';
+import dotenv from 'dotenv';
+dotenv.config();
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
 /**
  * Format document matching frontend expectations
@@ -82,6 +91,17 @@ export const uploadDocument = async (req, res) => {
       if (defaultCase) targetCaseId = defaultCase.id;
     }
 
+    let finalUrl = data.url || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
+
+    // If frontend sent a base64 string, upload it to Cloudinary from the backend
+    if (data.base64File) {
+      const uploadRes = await cloudinary.uploader.upload(data.base64File, {
+        resource_type: 'auto',
+        folder: 'medcare_docs'
+      });
+      finalUrl = uploadRes.secure_url;
+    }
+
     const newDoc = await prisma.document.create({
       data: {
         id: generatedId,
@@ -93,7 +113,7 @@ export const uploadDocument = async (req, res) => {
         date: data.date || currentDateStr,
         status: data.status || 'UPLOADED',
         size: data.size || '1.2 MB',
-        url: data.url || 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
+        url: finalUrl
       }
     });
 
