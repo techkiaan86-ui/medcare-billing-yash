@@ -9,7 +9,7 @@ const formatCase = (c) => {
   const rawDx = typeof c.diagnosisCodes === 'string' ? JSON.parse(c.diagnosisCodes) : c.diagnosisCodes;
   const dxList = Array.isArray(rawDx) ? rawDx : [];
 
-  const patientFullName = p.firstName || p.lastName ? `${p.firstName || ''} ${p.lastName || ''}`.trim() : (c.patientName || '');
+  const patientFullName = p.firstName || p.lastName ? `${p.firstName || ''} ${p.middleName ? p.middleName + ' ' : ''}${p.lastName || ''}`.trim() : (c.patientName || '');
   const patientAddrStr = p.addressLine1 || p.street ? `${p.addressLine1 || p.street || ''}, ${p.city || ''} ${p.state || ''} ${p.zipCode || ''}`.trim() : (c.patientAddress || '');
 
   let caseTotalBilling = 0;
@@ -36,13 +36,15 @@ const formatCase = (c) => {
       id: p.id || c.patientId,
       patientId: p.patientId || c.patientId,
       firstName: p.firstName || '',
+      middleName: p.middleName || '',
       lastName: p.lastName || '',
       dob: p.dob || '',
       sex: p.sex || '',
       gender: p.sex || '',
       phone: p.phone || '',
       email: p.email || '',
-      address: patientAddrStr
+      address: patientAddrStr,
+      selectedInjuryAreas: typeof p.selectedInjuryAreas === 'string' ? JSON.parse(p.selectedInjuryAreas) : (p.selectedInjuryAreas || [])
     },
     patientDob: p.dob || c.patientDob || '',
     patientSex: p.sex || c.patientSex || '',
@@ -81,6 +83,8 @@ const formatCase = (c) => {
     status: c.status || 'ACTIVE',
     createdAt: c.createdAt,
     bills: c.bills || [],
+    appointments: c.appointments || [],
+    clinicalNotes: c.clinicalNotes || [],
     caseTotalBilling,
     connectedProviderLedgersCount: uniqueProviders.size
   };
@@ -114,7 +118,9 @@ export const getCases = async (req, res) => {
       where,
       include: {
         patient: true,
-        bills: true
+        bills: true,
+        appointments: { orderBy: { createdAt: 'desc' } },
+        clinicalNotes: { orderBy: { createdAt: 'desc' } }
       },
       orderBy: { createdAt: 'desc' }
     });
@@ -149,7 +155,9 @@ export const getCaseById = async (req, res) => {
       },
       include: {
         patient: true,
-        bills: true
+        bills: true,
+        appointments: { orderBy: { createdAt: 'desc' } },
+        clinicalNotes: { orderBy: { createdAt: 'desc' } }
       }
     });
 
@@ -228,6 +236,7 @@ export const createCase = async (req, res) => {
         patient: {
           select: {
             firstName: true,
+            middleName: true,
             lastName: true
           }
         }
@@ -270,6 +279,7 @@ export const updateAssignedProviders = async (req, res) => {
         patient: {
           select: {
             firstName: true,
+            middleName: true,
             lastName: true
           }
         }
@@ -318,6 +328,7 @@ export const updateCase = async (req, res) => {
         patient: {
           select: {
             firstName: true,
+            middleName: true,
             lastName: true
           }
         }
