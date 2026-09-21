@@ -168,6 +168,7 @@ const formatBill = (b) => {
     totalPayments: parsedTotals.totalPayments || 0,
     balanceDue: parsedTotals.balanceDue || 0,
     aging: parsedAging,
+    cmsSignatures: b.cmsSignatures,
     createdAt: b.createdAt
   };
 };
@@ -1348,10 +1349,18 @@ export const updateBill = async (req, res) => {
 
     await recalculateBillTotals(id);
 
-    if (status) {
+    if (status || req.body.cmsSignatures) {
+      const dataToUpdate = {};
+      if (status) dataToUpdate.status = status;
+      if (req.body.cmsSignatures) {
+        dataToUpdate.cmsSignatures = typeof req.body.cmsSignatures === 'string' 
+          ? req.body.cmsSignatures 
+          : JSON.stringify(req.body.cmsSignatures);
+      }
+
       await prisma.bill.update({
         where: { id },
-        data: { status }
+        data: dataToUpdate
       });
     }
 

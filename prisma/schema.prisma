@@ -229,6 +229,7 @@ model Bill {
   status          String        @default("UNBILLED") @db.VarChar(50)
   totals          Json?         @map("totals")
   aging           Json?         @map("aging")
+  cmsSignatures   Json?         @map("cms_signatures")
   createdAt       DateTime      @default(now()) @map("created_at")
   case            Case          @relation(fields: [caseId], references: [id], onDelete: Cascade)
   provider        Provider      @relation(fields: [providerId], references: [id], onDelete: Cascade)
