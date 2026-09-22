@@ -1094,12 +1094,24 @@ export const getPaymentsList = async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
 
+    const formatPayerType = (t) => {
+      if (t.transactionType !== 'PAYMENT') {
+        return 'Contractual Write-off / Adjustment';
+      }
+      const notes = t.notes || '';
+      if (notes.includes('Payer: INSURANCE')) return 'Insurance Payment';
+      if (notes.includes('Payer: PATIENT')) return 'Patient Payment';
+      if (notes.includes('Payer: ATTORNEY')) return 'Attorney Settlement';
+      if (notes.includes('Payer: WORKERS_COMP')) return "Workers' Comp";
+      return 'Insurance / Patient Payment';
+    };
+
     const formatted = transactions.map(t => ({
       id: t.id,
       date: t.createdAt.toISOString().split('T')[0],
       provider: t.bill?.provider?.name || 'JOSMIC Wellness Center',
       patient: t.bill?.case?.patient ? `${t.bill.case.patient.firstName} ${t.bill.case.patient.lastName}`.trim() : 'SAMPLE TESTING',
-      type: t.transactionType === 'PAYMENT' ? 'Insurance / Patient Payment' : 'Contractual Write-off / Adjustment',
+      type: formatPayerType(t),
       amount: Number(t.amount),
       method: t.source || 'EFT',
       status: 'Posted',
