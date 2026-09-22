@@ -44,7 +44,8 @@ export const createProvider = async (req, res) => {
   const {
     name, businessName, serviceCategory,
     street, suite, city, state, zipCode,
-    phone, email, taxId, npi, renderingName, renderingCredentials
+    phone, email, taxId, npi, renderingName, renderingCredentials,
+    availableDiagnoses
   } = req.body;
 
   if (!name || !businessName || !npi || !taxId) {
@@ -76,7 +77,7 @@ export const createProvider = async (req, res) => {
         billingProvider,
         defaultPlaceOfService: '11',
         availableServices: [],
-        availableDiagnoses: [],
+        availableDiagnoses: availableDiagnoses || [],
         providerServices: []
       }
     });
@@ -137,6 +138,9 @@ export const updateProvider = async (req, res) => {
     const updatedRendering = { ...existingRendering, name: renderingName, credentials: renderingCredentials, npi };
     const updatedServiceFacility = { ...existingServiceFacility, name, address: `${street}, ${suite}, ${city}, ${state} ${zipCode}`, npi };
     const updatedBillingProvider = { ...existingBillingProvider, name, address: `${street}, ${city}, ${state} ${zipCode}`, phone };
+    
+    // Use the passed availableDiagnoses, or keep existing ones if not provided
+    const availableDiagnoses = updateFields.availableDiagnoses !== undefined ? updateFields.availableDiagnoses : (typeof existing.availableDiagnoses === 'string' ? JSON.parse(existing.availableDiagnoses || '[]') : existing.availableDiagnoses || []);
 
     const updated = await prisma.provider.update({
       where: { id },
@@ -151,6 +155,7 @@ export const updateProvider = async (req, res) => {
         serviceFacility: updatedServiceFacility,
         billingProvider: updatedBillingProvider,
         status: updateFields.status || existing.status,
+        availableDiagnoses: availableDiagnoses,
       }
     });
 
