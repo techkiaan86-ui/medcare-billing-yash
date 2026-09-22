@@ -1,6 +1,50 @@
 import { prisma } from '../config/db.js';
 
 /**
+ * Helper to calculate effective totals and aging for a bill statement,
+ * falling back to itemized serviceLines if stored bill.totals is zero/uninitialized.
+ */
+const getEffectiveBillTotalsAndAging = (b) => {
+  let sumCharges = 0;
+  let sumPayments = 0;
+  let sumAdjustments = 0;
+
+  const lines = b.serviceLines || [];
+  lines.forEach(l => {
+    sumCharges += (Number(l.charge) || 0);
+    const insPay = Number(l.insurancePayment) || 0;
+    const patPay = Number(l.patientPayment) || 0;
+    const othPay = Number(l.otherPayment) || 0;
+    sumPayments += (insPay + patPay + othPay);
+    sumAdjustments += (Number(l.adjustments) || 0);
+  });
+  const sumBalance = Math.max(0, sumCharges - (sumPayments + sumAdjustments));
+
+  let totals = typeof b.totals === 'string' ? JSON.parse(b.totals) : b.totals;
+  if (!totals || (totals.totalCharges === 0 && sumCharges > 0)) {
+    totals = {
+      totalCharges: Number(sumCharges.toFixed(2)),
+      totalPayments: Number(sumPayments.toFixed(2)),
+      totalAdjustments: Number(sumAdjustments.toFixed(2)),
+      balanceDue: Number(sumBalance.toFixed(2))
+    };
+  }
+
+  let aging = typeof b.aging === 'string' ? JSON.parse(b.aging) : b.aging;
+  const agingSum = (aging?.current || 0) + (aging?.past30 || 0) + (aging?.past60 || 0) + (aging?.past90 || 0);
+  if (!aging || (agingSum === 0 && totals?.balanceDue > 0)) {
+    aging = {
+      current: totals.balanceDue,
+      past30: 0,
+      past60: 0,
+      past90: 0
+    };
+  }
+
+  return { totals: totals || { totalCharges: 0, totalPayments: 0, totalAdjustments: 0, balanceDue: 0 }, aging: aging || { current: 0, past30: 0, past60: 0, past90: 0 } };
+};
+
+/**
  * Format a DB Bill and its ServiceLines to match frontend expectations
  */
 const formatBill = (b) => {
@@ -69,36 +113,7 @@ const formatBill = (b) => {
       : b.diagnosisCodes;
   }
 
-  let sumCharges = 0;
-  let sumPayments = 0;
-  let sumAdjustments = 0;
-  formattedLines.forEach(l => {
-    sumCharges += (l.charge || 0);
-    sumPayments += ((l.payments?.insurance || 0) + (l.payments?.patient || 0) + (l.payments?.other || 0));
-    sumAdjustments += (l.adjustments || 0);
-  });
-  const sumBalance = Math.max(0, sumCharges - (sumPayments + sumAdjustments));
-
-  let parsedTotals = typeof b.totals === 'string' ? JSON.parse(b.totals) : b.totals;
-  if (!parsedTotals || (parsedTotals.totalCharges === 0 && sumCharges > 0)) {
-    parsedTotals = {
-      totalCharges: Number(sumCharges.toFixed(2)),
-      totalPayments: Number(sumPayments.toFixed(2)),
-      totalAdjustments: Number(sumAdjustments.toFixed(2)),
-      balanceDue: Number(sumBalance.toFixed(2))
-    };
-  }
-
-  let parsedAging = typeof b.aging === 'string' ? JSON.parse(b.aging) : b.aging;
-  const agingSum = (parsedAging?.current || 0) + (parsedAging?.past30 || 0) + (parsedAging?.past60 || 0) + (parsedAging?.past90 || 0);
-  if (!parsedAging || (agingSum === 0 && parsedTotals.balanceDue > 0)) {
-    parsedAging = {
-      current: parsedTotals.balanceDue,
-      past30: 0,
-      past60: 0,
-      past90: 0
-    };
-  }
+  const { totals: parsedTotals, aging: parsedAging } = getEffectiveBillTotalsAndAging(b);
 
   return {
     id: b.id,
@@ -860,6 +875,7 @@ export const getAgingSummary = async (req, res) => {
       where,
       include: {
         provider: true,
+        serviceLines: true,
         case: {
           include: { patient: true }
         }
@@ -869,7 +885,9 @@ export const getAgingSummary = async (req, res) => {
     const cases = await prisma.case.findMany({
       include: {
         patient: true,
-        bills: true
+        bills: {
+          include: { serviceLines: true }
+        }
       }
     });
 
@@ -882,8 +900,7 @@ export const getAgingSummary = async (req, res) => {
     const providerMap = {};
 
     for (const b of bills) {
-      const totals = typeof b.totals === 'string' ? JSON.parse(b.totals) : b.totals || {};
-      const aging = typeof b.aging === 'string' ? JSON.parse(b.aging) : b.aging || {};
+      const { totals, aging } = getEffectiveBillTotalsAndAging(b);
 
       const bal = Number(totals.balanceDue || 0);
       const c = Number(aging.current || 0);
@@ -932,16 +949,13 @@ export const getAgingSummary = async (req, res) => {
       let casePast90 = 0;
 
       (c.bills || []).forEach(b => {
-        const totals = typeof b.totals === 'string' ? JSON.parse(b.totals) : b.totals || {};
-        const aging = typeof b.aging === 'string' ? JSON.parse(b.aging) : b.aging || {};
+        const { totals, aging } = getEffectiveBillTotalsAndAging(b);
         caseBal += Number(totals.balanceDue || 0);
         caseCurrent += Number(aging.current || 0);
         casePast30 += Number(aging.past30 || 0);
         casePast60 += Number(aging.past60 || 0);
         casePast90 += Number(aging.past90 || 0);
       });
-
-      // Removed dummy default balances
 
       return {
         patientId: c.patient?.patientId || c.patientId || 'PAT-100',
@@ -1013,25 +1027,24 @@ export const getOverviewStats = async (req, res) => {
     let past90 = 0;
 
     for (const b of bills) {
-      const totals = typeof b.totals === 'string' ? JSON.parse(b.totals) : b.totals || {};
-      const aging = typeof b.aging === 'string' ? JSON.parse(b.aging) : b.aging || {};
+      const { totals, aging } = getEffectiveBillTotalsAndAging(b);
 
-      const chg = totals.totalCharges || 0;
-      const pmt = totals.totalPayments || 0;
-      const adj = totals.totalAdjustments || 0;
+      const chg = Number(totals.totalCharges || 0);
+      const pmt = Number(totals.totalPayments || 0);
+      const adj = Number(totals.totalAdjustments || 0);
       
-      // Fix: Outstanding Balance = Total Billed - Amount Collected
-      const bal = chg - pmt;
+      // Outstanding Balance = Total Billed - (Amount Collected + Adjustments)
+      const bal = Math.max(0, chg - (pmt + adj));
 
       totalBilled += chg;
       totalPayments += pmt;
       totalAdjustments += adj;
       balanceDue += bal;
 
-      current += (aging.current || 0);
-      past30 += (aging.past30 || 0);
-      past60 += (aging.past60 || 0);
-      past90 += (aging.past90 || 0);
+      current += Number(aging.current || 0);
+      past30 += Number(aging.past30 || 0);
+      past60 += Number(aging.past60 || 0);
+      past90 += Number(aging.past90 || 0);
 
       if (!providerMap[b.providerId]) {
         providerMap[b.providerId] = {
@@ -1094,12 +1107,24 @@ export const getPaymentsList = async (req, res) => {
       orderBy: { createdAt: 'desc' }
     });
 
+    const formatPayerType = (t) => {
+      if (t.transactionType !== 'PAYMENT') {
+        return 'Contractual Write-off / Adjustment';
+      }
+      const notes = t.notes || '';
+      if (notes.includes('Payer: INSURANCE')) return 'Insurance Payment';
+      if (notes.includes('Payer: PATIENT')) return 'Patient Payment';
+      if (notes.includes('Payer: ATTORNEY')) return 'Attorney Settlement';
+      if (notes.includes('Payer: WORKERS_COMP')) return "Workers' Comp";
+      return 'Insurance / Patient Payment';
+    };
+
     const formatted = transactions.map(t => ({
       id: t.id,
       date: t.createdAt.toISOString().split('T')[0],
       provider: t.bill?.provider?.name || 'JOSMIC Wellness Center',
       patient: t.bill?.case?.patient ? `${t.bill.case.patient.firstName} ${t.bill.case.patient.lastName}`.trim() : 'SAMPLE TESTING',
-      type: t.transactionType === 'PAYMENT' ? 'Insurance / Patient Payment' : 'Contractual Write-off / Adjustment',
+      type: formatPayerType(t),
       amount: Number(t.amount),
       method: t.source || 'EFT',
       status: 'Posted',
