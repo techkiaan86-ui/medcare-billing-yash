@@ -251,7 +251,7 @@ export const createPatient = async (req, res) => {
         insuranceAdjusterPhone: data.insuranceAdjusterPhone || '',
         secondaryInsuranceCompany: data.secondaryInsuranceCompany || '',
         secondaryPolicyNumber: data.secondaryPolicyNumber || '',
-        assignedProviderIds: data.assignedProviderIds || ['prov-josmic', 'prov-davs', 'prov-anik', 'prov-counselor'],
+        assignedProviderIds: data.assignedProviderIds || [],
         knownAllergies: data.knownAllergies || '',
         allergyReactionSeverity: data.allergyReactionSeverity || '',
         currentMedications: data.currentMedications || '',
@@ -281,6 +281,7 @@ export const createPatient = async (req, res) => {
         referringProviderNpi: data.referringProviderNpi || '',
         attorneyName: data.referringAttorney || data.attorneyName || '',
         lawFirm: data.lawFirm || (data.referringAttorney ? `${data.referringAttorney}` : ''),
+        assignedProviderIds: data.assignedProviderIds || [],
         status: 'ACTIVE'
       }
     });
@@ -394,8 +395,14 @@ export const updatePatient = async (req, res) => {
         where: { patientId: existing.id },
         data: {
           ...(refName !== undefined ? { referringProviderName: refName } : {}),
-          ...(refNpi !== undefined ? { referringProviderNpi: refNpi } : {})
+          ...(refNpi !== undefined ? { referringProviderNpi: refNpi } : {}),
+          ...(updates.assignedProviderIds ? { assignedProviderIds: updates.assignedProviderIds } : {})
         }
+      });
+    } else if (updates.assignedProviderIds) {
+      await prisma.case.updateMany({
+        where: { patientId: existing.id },
+        data: { assignedProviderIds: updates.assignedProviderIds }
       });
     }
 

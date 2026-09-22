@@ -79,7 +79,7 @@ const formatCase = (c) => {
     insuranceAdjusterPhone: c.insuranceAdjusterPhone || '',
     liabilityStatus: c.liabilityStatus || 'PENDING',
     caseNotes: c.caseNotes || '',
-    assignedProviderIds: typeof c.assignedProviderIds === 'string' ? JSON.parse(c.assignedProviderIds) : (c.assignedProviderIds || ['prov-josmic', 'prov-davs', 'prov-anik', 'prov-counselor']),
+    assignedProviderIds: typeof c.assignedProviderIds === 'string' ? JSON.parse(c.assignedProviderIds) : (c.assignedProviderIds || []),
     status: c.status || 'ACTIVE',
     createdAt: c.createdAt,
     bills: c.bills || [],
@@ -229,7 +229,7 @@ export const createCase = async (req, res) => {
         insuranceAdjusterPhone: data.insuranceAdjusterPhone || '',
         liabilityStatus: data.liabilityStatus || 'PENDING',
         caseNotes: data.caseNotes || '',
-        assignedProviderIds: data.assignedProviderIds || ['prov-josmic', 'prov-davs', 'prov-anik', 'prov-counselor'],
+        assignedProviderIds: data.assignedProviderIds || [],
         status: 'ACTIVE'
       },
       include: {
