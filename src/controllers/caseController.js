@@ -44,6 +44,7 @@ const formatCase = (c) => {
       phone: p.phone || '',
       email: p.email || '',
       address: patientAddrStr,
+      knownAllergies: p.knownAllergies || '',
       selectedInjuryAreas: typeof p.selectedInjuryAreas === 'string' ? JSON.parse(p.selectedInjuryAreas) : (p.selectedInjuryAreas || [])
     },
     patientDob: p.dob || c.patientDob || '',
