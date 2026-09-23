@@ -5,7 +5,16 @@ export const getAllModalities = async (req, res) => {
     const modalities = await prisma.serviceModality.findMany({
       orderBy: { createdAt: 'asc' },
     });
-    res.status(200).json(modalities);
+    
+    // Dynamically strip (Confirmed) and (Pending) if they exist in the DB
+    const cleanedModalities = modalities.map(mod => {
+      if (mod.cptCode) {
+        mod.cptCode = mod.cptCode.replace(' (Confirmed)', '').replace(' (Pending)', '');
+      }
+      return mod;
+    });
+    
+    res.status(200).json(cleanedModalities);
   } catch (error) {
     console.error('Error fetching modalities:', error);
     res.status(500).json({ error: 'Failed to fetch modalities' });
