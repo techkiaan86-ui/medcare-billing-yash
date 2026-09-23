@@ -646,7 +646,39 @@ export const postPayment = async (req, res) => {
       return res.status(404).json({ error: 'Bill not found.' });
     }
 
+    const pmtAmount = parseFloat(amount);
+    if (isNaN(pmtAmount) || pmtAmount <= 0) {
+      return res.status(400).json({ error: 'Invalid payment amount.' });
+    }
+
     const lines = bill.serviceLines || [];
+    let currentBillBalanceDue = 0;
+    if (lines.length > 0) {
+      let totalCharges = 0;
+      let totalPayments = 0;
+      let totalAdjustments = 0;
+      for (const l of lines) {
+        totalCharges += (Number(l.charge) || 0);
+        totalPayments += ((Number(l.insurancePayment) || 0) + (Number(l.patientPayment) || 0) + (Number(l.otherPayment) || 0));
+        totalAdjustments += (Number(l.adjustments) || 0);
+      }
+      currentBillBalanceDue = Math.max(0, totalCharges - (totalPayments + totalAdjustments));
+    } else if (bill.totals) {
+      let parsedTotals = {};
+      if (typeof bill.totals === 'string') {
+        try { parsedTotals = JSON.parse(bill.totals); } catch (e) {}
+      } else if (typeof bill.totals === 'object') {
+        parsedTotals = bill.totals;
+      }
+      currentBillBalanceDue = Number(parsedTotals.balanceDue) || 0;
+    }
+
+    if (Math.round(pmtAmount * 100) > Math.round(currentBillBalanceDue * 100)) {
+      return res.status(400).json({
+        error: `Payment amount ($${pmtAmount.toFixed(2)}) cannot exceed current bill balance due ($${currentBillBalanceDue.toFixed(2)}).`
+      });
+    }
+
     let targetLine = (lineIndex !== undefined && lines[lineIndex])
       ? lines[lineIndex]
       : lines.find(l => Number(l.lineBalance) > 0) || lines[0];
