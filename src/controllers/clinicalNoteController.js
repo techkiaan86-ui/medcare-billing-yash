@@ -9,6 +9,7 @@ const formatNote = (n) => {
     id: n.id,
     patientId: n.patientId,
     patientName: n.patient ? `${n.patient.firstName} ${n.patient.lastName}`.trim() : 'Unknown Patient',
+    selectedInjuryAreas: n.patient?.selectedInjuryAreas || [],
     caseId: n.caseId,
     providerId: n.providerId,
     providerName: n.provider?.name || 'Unknown Provider',
@@ -47,7 +48,7 @@ export const getNotes = async (req, res) => {
     const notes = await prisma.clinicalNote.findMany({
       where,
       include: {
-        patient: { select: { firstName: true, lastName: true } },
+        patient: { select: { firstName: true, lastName: true, selectedInjuryAreas: true } },
         provider: { select: { name: true } }
       },
       orderBy: { createdAt: 'desc' }
@@ -70,7 +71,7 @@ export const getNoteById = async (req, res) => {
     const note = await prisma.clinicalNote.findUnique({
       where: { id },
       include: {
-        patient: { select: { firstName: true, lastName: true } },
+        patient: { select: { firstName: true, lastName: true, selectedInjuryAreas: true } },
         provider: { select: { name: true } }
       }
     });
@@ -187,7 +188,7 @@ export const createNote = async (req, res) => {
         addendums: []
       },
       include: {
-        patient: { select: { firstName: true, lastName: true } },
+        patient: { select: { firstName: true, lastName: true, selectedInjuryAreas: true } },
         provider: { select: { name: true } }
       }
     });
@@ -229,7 +230,7 @@ export const signNote = async (req, res) => {
         author: authorName || existing.author
       },
       include: {
-        patient: { select: { firstName: true, lastName: true } },
+        patient: { select: { firstName: true, lastName: true, selectedInjuryAreas: true } },
         provider: { select: { name: true } }
       }
     });
@@ -279,7 +280,7 @@ export const amendNote = async (req, res) => {
         addendums: [...currentAddendums, newAddendum]
       },
       include: {
-        patient: { select: { firstName: true, lastName: true } },
+        patient: { select: { firstName: true, lastName: true, selectedInjuryAreas: true } },
         provider: { select: { name: true } }
       }
     });
