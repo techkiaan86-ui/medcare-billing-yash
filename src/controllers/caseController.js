@@ -62,6 +62,15 @@ const formatCase = (c) => {
     policeReportNumber: c.policeReportNumber || '',
     emergencyTransport: c.emergencyTransport || 'NONE',
     chiefComplaint: c.chiefComplaint || '',
+    painDescription: (() => {
+      try {
+        if (!c.painDescription) return [];
+        if (typeof c.painDescription === 'string') return JSON.parse(c.painDescription);
+        return Array.isArray(c.painDescription) ? c.painDescription : [];
+      } catch (e) {
+        return [];
+      }
+    })(),
     injuryBodyParts: c.injuryBodyParts || '',
     diagnosisCodes: dxList,
     referringProviderName: c.referringProviderName || '',
@@ -212,6 +221,7 @@ export const createCase = async (req, res) => {
         policeReportNumber: data.policeReportNumber || '',
         emergencyTransport: data.emergencyTransport || '',
         chiefComplaint: data.chiefComplaint || '',
+        painDescription: Array.isArray(data.painDescription) ? JSON.stringify(data.painDescription) : (data.painDescription ? JSON.stringify([data.painDescription]) : '[]'),
         injuryBodyParts: data.injuryBodyParts || '',
         diagnosisCodes: data.diagnosisCodes || [],
         referringProviderName: data.referringProviderName || '',
@@ -326,6 +336,7 @@ export const updateCase = async (req, res) => {
         ...(data.policeReportNumber !== undefined && { policeReportNumber: data.policeReportNumber }),
         ...(data.emergencyTransport !== undefined && { emergencyTransport: data.emergencyTransport }),
         ...(data.chiefComplaint !== undefined && { chiefComplaint: data.chiefComplaint }),
+        ...(data.painDescription !== undefined && { painDescription: Array.isArray(data.painDescription) ? JSON.stringify(data.painDescription) : JSON.stringify([data.painDescription]) }),
         ...(data.injuryBodyParts !== undefined && { injuryBodyParts: data.injuryBodyParts }),
         ...(data.diagnosisCodes !== undefined && { diagnosisCodes: data.diagnosisCodes }),
         ...(data.referringProviderName !== undefined && { referringProviderName: data.referringProviderName }),

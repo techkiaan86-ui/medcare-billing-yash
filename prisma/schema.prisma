@@ -130,6 +130,7 @@ model Case {
   policeReportNumber     String?        @map("police_report_number") @db.VarChar(100)
   emergencyTransport     String?        @map("emergency_transport") @db.VarChar(50)
   chiefComplaint         String?        @map("chief_complaint") @db.Text
+  painDescription        String?        @map("pain_description") @db.Text
   injuryBodyParts        String?        @map("injury_body_parts") @db.VarChar(255)
   diagnosisCodes         Json?          @map("diagnosis_codes")
   referringProviderName  String?        @map("referring_provider_name") @db.VarChar(100)
